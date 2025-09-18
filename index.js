@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const AIService = require('./ai-service');
 const { config, getConfig, validateInventoryData } = require('./config');
 
@@ -7,6 +8,7 @@ const app = express();
 const aiService = new AIService();
 
 app.use(express.json());
+app.use(express.static(path.join(__dirname)));
 
 // Middleware for logging
 app.use((req, res, next) => {
@@ -150,6 +152,15 @@ app.post('/voice', async (req, res) => {
       originalTranscript: transcript
     });
   }
+});
+
+// Admin interface
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
 // Health check endpoint
