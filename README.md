@@ -88,8 +88,50 @@ The server will start on `http://localhost:3000`
 
 ## 🔧 API Endpoints
 
+### 🔐 `POST /webhook/voice` (Secure Webhook)
+**New secure webhook endpoint with multiple authentication methods for external integrations.**
+
+**Authentication Methods:**
+- **Bearer Token**: Include `Authorization: Bearer your_token` header
+- **Wake Phrase**: Include wake phrase at start of command (e.g., "pickle prince pepsi add items")
+- **Spoken PIN**: Include PIN in command (e.g., "pin 1234 add items" or "pin one two three four add items")
+
+**Request:**
+```json
+{
+  "command": "pickle prince pepsi add 2 apples to shopping list",
+  "sessionId": "optional-session-id"
+}
+```
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "Voice command processed successfully",
+  "authMethod": "wake_phrase",
+  "data": {
+    "original_command": "pickle prince pepsi add 2 apples to shopping list",
+    "clean_command": "add 2 apples to shopping list",
+    "interpreted_action": { "action": "addRow", "tabName": "groceries", ... },
+    "sheets_response": { "status": "success", ... }
+  }
+}
+```
+
+**Response (Auth Failed):**
+```json
+{
+  "status": "error",
+  "message": "Authentication failed",
+  "code": "AUTH_FAILED",
+  "details": ["Wake phrase not detected", "Invalid Bearer token"],
+  "supportedMethods": ["Bearer token in Authorization header", "Wake phrase", "Spoken PIN"]
+}
+```
+
 ### 🆕 `POST /voice-command` (Conversational AI)
-Main endpoint for natural language voice commands.
+Main endpoint for natural language voice commands with optional authentication support.
 
 **Request:**
 ```json
@@ -198,6 +240,13 @@ Set these environment variables in your deployment platform:
 - `PORT`: Server port (usually set automatically by hosting platforms)
 - `OPENAI_API_KEY`: Optional - OpenAI API key for enhanced AI processing
 
+**New Authentication Variables:**
+- `BEARER_TOKEN`: Token for webhook Bearer authentication (default: 'your_bearer_token_here')
+- `WAKE_PHRASE`: Wake phrase for voice activation (default: 'pickle prince pepsi')
+- `BACKUP_PIN`: Numeric PIN for spoken authentication (default: '1234')
+- `REQUIRE_WAKE_PHRASE`: Require wake phrase for /voice-command endpoint (default: false)
+- `ENABLE_PIN_FALLBACK`: Enable spoken PIN authentication (default: true)
+
 ## 🧪 Testing
 
 ### Testing Google Apps Script
@@ -210,6 +259,34 @@ curl -X POST \
   -d '{"action":"addRow","tabName":"test","item":"apple","qty":1,"pricePerKg":100,"status":"owes"}' \
   YOUR_GOOGLE_APPS_SCRIPT_URL
 ```
+
+### Testing Webhook Authentication
+
+Test the secure webhook endpoint with different authentication methods:
+
+```bash
+# Test with Bearer token
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_token_here" \
+  -d '{"command":"add 2 bananas to shopping list"}' \
+  http://localhost:3000/webhook/voice
+
+# Test with wake phrase
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"command":"pickle prince pepsi add 2 bananas to shopping list"}' \
+  http://localhost:3000/webhook/voice
+
+# Test with spoken PIN
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"command":"pin 1234 add 2 bananas to shopping list"}' \
+  http://localhost:3000/webhook/voice
+```
+
+**Interactive Testing:**
+Visit `/webhook-test.html` in your browser for a comprehensive authentication testing interface.
 
 ### Testing Conversational AI
 

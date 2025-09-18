@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webhook Voice Test - Ara Voice</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .auth-controls {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        .auth-method {
+            margin-bottom: 1rem;
+        }
+        .auth-method label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+        .auth-input {
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+        }
+        .auth-input input {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 300px;
+        }
+        .test-results {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-top: 2rem;
+        }
+        .test-button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-right: 1rem;
+            margin-bottom: 1rem;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .result-item {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border-radius: 5px;
+            background: #f8f9fa;
+        }
+        .result-success {
+            border-left: 4px solid var(--success);
+        }
+        .result-error {
+            border-left: 4px solid var(--error);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎤 Webhook Voice Testing</h1>
+            <p>Test the new authentication methods for the webhook endpoint</p>
+        </header>
+
+        <main>
+            <div class="auth-controls">
+                <h2>Authentication Methods</h2>
+                
+                <div class="auth-method">
+                    <label>
+                        <input type="radio" name="authMethod" value="none" checked>
+                        No Authentication
+                    </label>
+                </div>
+                
+                <div class="auth-method">
+                    <label>
+                        <input type="radio" name="authMethod" value="bearer">
+                        Bearer Token
+                    </label>
+                    <div class="auth-input">
+                        <input type="text" id="bearerToken" placeholder="Enter Bearer token" value="secret_webhook_token">
+                    </div>
+                </div>
+                
+                <div class="auth-method">
+                    <label>
+                        <input type="radio" name="authMethod" value="wakePhrase">
+                        Wake Phrase
+                    </label>
+                    <div class="auth-input">
+                        <input type="text" id="wakePhrase" placeholder="Wake phrase" value="pickle prince pepsi" readonly>
+                    </div>
+                </div>
+                
+                <div class="auth-method">
+                    <label>
+                        <input type="radio" name="authMethod" value="pin">
+                        Spoken PIN
+                    </label>
+                    <div class="auth-input">
+                        <input type="text" id="spokenPin" placeholder="PIN" value="1234" readonly>
+                    </div>
+                </div>
+            </div>
+
+            <div class="voice-controller">
+                <h2>Test Commands</h2>
+                <button class="test-button" onclick="testCommand('add 2 apples to shopping list')">
+                    Add Apples
+                </button>
+                <button class="test-button" onclick="testCommand('show my grocery list')">
+                    Show List
+                </button>
+                <button class="test-button" onclick="testCommand('delete last item')">
+                    Delete Last
+                </button>
+                
+                <div style="margin-top: 2rem;">
+                    <input type="text" id="customCommand" placeholder="Enter custom command..." style="width: 300px; padding: 0.5rem;">
+                    <button class="test-button" onclick="testCustomCommand()">Test Custom</button>
+                </div>
+            </div>
+
+            <div class="test-results">
+                <h2>Test Results</h2>
+                <div id="results"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function getSelectedAuthMethod() {
+            const selected = document.querySelector('input[name="authMethod"]:checked').value;
+            return selected;
+        }
+
+        function buildAuthenticatedCommand(command) {
+            const method = getSelectedAuthMethod();
+            
+            switch (method) {
+                case 'wakePhrase':
+                    return `${document.getElementById('wakePhrase').value} ${command}`;
+                case 'pin':
+                    return `pin ${document.getElementById('spokenPin').value} ${command}`;
+                default:
+                    return command;
+            }
+        }
+
+        function getAuthHeaders() {
+            const method = getSelectedAuthMethod();
+            const headers = { 'Content-Type': 'application/json' };
+            
+            if (method === 'bearer') {
+                headers['Authorization'] = `Bearer ${document.getElementById('bearerToken').value}`;
+            }
+            
+            return headers;
+        }
+
+        async function testCommand(command) {
+            const resultsDiv = document.getElementById('results');
+            const authenticatedCommand = buildAuthenticatedCommand(command);
+            const headers = getAuthHeaders();
+            const method = getSelectedAuthMethod();
+            
+            // Add a loading indicator
+            const resultItem = document.createElement('div');
+            resultItem.className = 'result-item';
+            resultItem.innerHTML = `
+                <strong>Testing:</strong> ${method} authentication<br>
+                <strong>Command:</strong> ${authenticatedCommand}<br>
+                <em>Loading...</em>
+            `;
+            resultsDiv.insertBefore(resultItem, resultsDiv.firstChild);
+            
+            try {
+                const response = await fetch('/webhook/voice', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({
+                        command: authenticatedCommand,
+                        sessionId: `test-${Date.now()}`
+                    })
+                });
+                
+                const result = await response.json();
+                
+                resultItem.className = `result-item ${response.ok ? 'result-success' : 'result-error'}`;
+                resultItem.innerHTML = `
+                    <strong>Method:</strong> ${method}<br>
+                    <strong>Status:</strong> ${response.status} ${response.ok ? '✅' : '❌'}<br>
+                    <strong>Command:</strong> ${authenticatedCommand}<br>
+                    ${result.authMethod ? `<strong>Auth Method Used:</strong> ${result.authMethod}<br>` : ''}
+                    ${result.data?.clean_command ? `<strong>Clean Command:</strong> ${result.data.clean_command}<br>` : ''}
+                    <strong>Response:</strong> ${result.message || result.error || 'No message'}<br>
+                    ${result.details ? `<strong>Details:</strong> ${result.details.join(', ')}<br>` : ''}
+                    ${result.supportedMethods ? `<strong>Supported Methods:</strong> ${result.supportedMethods.join(', ')}<br>` : ''}
+                `;
+                
+            } catch (error) {
+                resultItem.className = 'result-item result-error';
+                resultItem.innerHTML = `
+                    <strong>Method:</strong> ${method}<br>
+                    <strong>Error:</strong> ${error.message}<br>
+                    <strong>Command:</strong> ${authenticatedCommand}
+                `;
+            }
+        }
+
+        function testCustomCommand() {
+            const command = document.getElementById('customCommand').value.trim();
+            if (command) {
+                testCommand(command);
+            } else {
+                alert('Please enter a command to test');
+            }
+        }
+    </script>
+</body>
+</html>

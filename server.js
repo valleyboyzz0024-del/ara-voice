@@ -18,6 +18,101 @@ if (!config.useMockAI) {
 // Context storage for conversation continuity
 const conversationContexts = new Map();
 
+// Authentication utilities
+function validateBearerToken(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return false;
+  }
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  return token === config.auth.bearerToken;
+}
+
+function detectWakePhrase(command) {
+  const normalizedCommand = command.toLowerCase().trim();
+  const wakePhrase = config.auth.wakePhrase.toLowerCase();
+  
+  if (normalizedCommand.startsWith(wakePhrase)) {
+    return {
+      detected: true,
+      cleanCommand: command.substring(config.auth.wakePhrase.length).trim()
+    };
+  }
+  
+  return { detected: false, cleanCommand: command };
+}
+
+function extractSpokenPin(command) {
+  // Look for PIN patterns like "PIN 1234" or "pin one two three four"
+  const pinPattern = /\b(?:pin|code)\s+([0-9]{3,6}|(?:zero|one|two|three|four|five|six|seven|eight|nine|\s)+)\b/i;
+  const match = command.match(pinPattern);
+  
+  if (!match) return null;
+  
+  let pin = match[1].toLowerCase();
+  
+  // Convert spoken numbers to digits
+  const numberWords = {
+    'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
+    'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9'
+  };
+  
+  // Replace word numbers with digits
+  for (const [word, digit] of Object.entries(numberWords)) {
+    pin = pin.replace(new RegExp(word, 'g'), digit);
+  }
+  
+  // Remove spaces and keep only digits
+  pin = pin.replace(/\s+/g, '').replace(/[^0-9]/g, '');
+  
+  return pin.length >= 3 ? pin : null;
+}
+
+function authenticateRequest(req, command) {
+  const authResult = {
+    success: false,
+    method: null,
+    cleanCommand: command,
+    errors: []
+  };
+  
+  // Try Bearer token first
+  if (validateBearerToken(req)) {
+    authResult.success = true;
+    authResult.method = 'bearer';
+    return authResult;
+  } else if (req.headers.authorization) {
+    authResult.errors.push('Invalid Bearer token');
+  }
+  
+  // Try wake phrase detection
+  const wakeResult = detectWakePhrase(command);
+  if (wakeResult.detected) {
+    authResult.success = true;
+    authResult.method = 'wake_phrase';
+    authResult.cleanCommand = wakeResult.cleanCommand;
+    return authResult;
+  } else {
+    authResult.errors.push(`Wake phrase "${config.auth.wakePhrase}" not detected`);
+  }
+  
+  // Try PIN fallback if enabled
+  if (config.auth.enablePinFallback) {
+    const extractedPin = extractSpokenPin(command);
+    if (extractedPin && extractedPin === config.auth.backupPin) {
+      authResult.success = true;
+      authResult.method = 'spoken_pin';
+      // Remove PIN part from command
+      authResult.cleanCommand = command.replace(/\b(?:pin|code)\s+[0-9a-z\s]+\b/i, '').trim();
+      return authResult;
+    } else if (extractedPin) {
+      authResult.errors.push('Invalid PIN provided');
+    }
+  }
+  
+  return authResult;
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -33,11 +128,136 @@ app.get('/config', (req, res) => {
   res.status(200).json({ 
     googleAppsScriptUrl: config.googleAppsScriptUrl ? 'Configured' : 'Missing',
     port: config.port,
-    aiMode: config.useMockAI ? 'Mock AI' : 'OpenAI'
+    aiMode: config.useMockAI ? 'Mock AI' : 'OpenAI',
+    auth: {
+      bearerTokenConfigured: config.auth.bearerToken !== 'your_bearer_token_here',
+      requireWakePhrase: config.auth.requireWakePhrase,
+      enablePinFallback: config.auth.enablePinFallback,
+      wakePhrase: config.auth.wakePhrase
+    }
   });
 });
 
-// New voice command endpoint with conversational AI
+// Webhook endpoint with comprehensive authentication
+app.post('/webhook/voice', async (req, res) => {
+  try {
+    console.log('Received webhook voice command:', req.body);
+    
+    if (!req.body.command || typeof req.body.command !== 'string') {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'No valid command provided',
+        code: 'MISSING_COMMAND'
+      });
+    }
+    
+    // Authenticate request with multiple methods
+    const authResult = authenticateRequest(req, req.body.command);
+    
+    if (!authResult.success) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Authentication failed',
+        code: 'AUTH_FAILED',
+        details: authResult.errors,
+        supportedMethods: [
+          ...(config.auth.bearerToken !== 'your_bearer_token_here' ? ['Bearer token in Authorization header'] : []),
+          ...(config.auth.requireWakePhrase ? [`Wake phrase: "${config.auth.wakePhrase}"` ] : []),
+          ...(config.auth.enablePinFallback ? ['Spoken PIN in command'] : [])
+        ]
+      });
+    }
+    
+    console.log(`Authentication successful via ${authResult.method}`);
+    
+    const sessionId = req.body.sessionId || 'webhook-session-' + Date.now();
+    
+    // Process command with AI using cleaned command
+    const aiResult = await processNaturalLanguageCommand(authResult.cleanCommand, sessionId);
+    
+    if (!aiResult.success) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: aiResult.error,
+        code: 'PROCESSING_FAILED',
+        needsClarification: aiResult.needsClarification || false,
+        authMethod: authResult.method
+      });
+    }
+    
+    const commandData = aiResult.data;
+    console.log('AI processed command:', commandData);
+    
+    // Create abort controller for timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), config.requestTimeout);
+    
+    try {
+      // Send data to Google Apps Script based on action type (skip if in test mode)
+      let response;
+      if (config.googleAppsScriptUrl.includes('test-mode') || config.googleAppsScriptUrl.includes('localhost')) {
+        // Mock response for testing
+        response = {
+          data: {
+            status: 'success',
+            message: `Mock: ${commandData.action} operation completed successfully`,
+            data: commandData
+          }
+        };
+      } else {
+        response = await axios.post(
+          config.googleAppsScriptUrl,
+          {
+            action: commandData.action,
+            ...commandData
+          },
+          { 
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            timeout: config.requestTimeout
+          }
+        );
+      }
+      
+      clearTimeout(timeoutId);
+      
+      return res.status(200).json({
+        status: 'success',
+        message: 'Voice command processed successfully',
+        authMethod: authResult.method,
+        data: {
+          original_command: req.body.command,
+          clean_command: authResult.cleanCommand,
+          interpreted_action: commandData,
+          sheets_response: response.data
+        }
+      });
+      
+    } catch (sheetsError) {
+      clearTimeout(timeoutId);
+      console.error('Google Apps Script Error:', sheetsError);
+      
+      return res.status(502).json({ 
+        status: 'error', 
+        message: `Failed to update Google Sheets: ${sheetsError.message}`,
+        code: 'SHEETS_ERROR',
+        authMethod: authResult.method
+      });
+    }
+    
+  } catch (error) {
+    console.error('Unexpected error in /webhook/voice:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Internal server error',
+      code: 'INTERNAL_ERROR'
+    });
+  }
+});
+
+// New voice command endpoint with conversational AI (and optional authentication)
 app.post('/voice-command', async (req, res) => {
   try {
     console.log('Received voice command:', req.body);
@@ -49,10 +269,37 @@ app.post('/voice-command', async (req, res) => {
       });
     }
     
+    let cleanCommand = req.body.command;
+    let authMethod = 'none';
+    
+    // Optional authentication check (for enhanced security)
+    if (req.headers.authorization || config.auth.requireWakePhrase) {
+      const authResult = authenticateRequest(req, req.body.command);
+      
+      if (!authResult.success && (req.headers.authorization || config.auth.requireWakePhrase)) {
+        return res.status(401).json({
+          status: 'error',
+          message: 'Authentication required for this endpoint',
+          details: authResult.errors,
+          supportedMethods: [
+            ...(config.auth.bearerToken !== 'your_bearer_token_here' ? ['Bearer token in Authorization header'] : []),
+            ...(config.auth.requireWakePhrase ? [`Wake phrase: "${config.auth.wakePhrase}"` ] : []),
+            ...(config.auth.enablePinFallback ? ['Spoken PIN in command'] : [])
+          ]
+        });
+      }
+      
+      if (authResult.success) {
+        cleanCommand = authResult.cleanCommand;
+        authMethod = authResult.method;
+        console.log(`Optional authentication successful via ${authMethod}`);
+      }
+    }
+    
     const sessionId = req.body.sessionId || 'default';
     
     // Process command with AI
-    const aiResult = await processNaturalLanguageCommand(req.body.command, sessionId);
+    const aiResult = await processNaturalLanguageCommand(cleanCommand, sessionId);
     
     if (!aiResult.success) {
       return res.status(400).json({ 
@@ -107,8 +354,10 @@ app.post('/voice-command', async (req, res) => {
         message: 'Command processed successfully',
         data: {
           original_command: req.body.command,
+          clean_command: cleanCommand,
           interpreted_action: commandData,
-          sheets_response: response.data
+          sheets_response: response.data,
+          authMethod: authMethod
         }
       });
       
