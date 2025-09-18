@@ -8,7 +8,7 @@ app.post('/ara', (req, res) => {
   if (req.body.key !== 'Bruins') return res.status(403).send('Wrong key');
   
   console.log(`Voice update: ${tab} | ${item} | ${qty}kg | $${price}/kg | ${status}`);
-  // Later: this will hit your Google Sheet
+  // TODO: This endpoint currently only logs. To update Google Sheet, implement similar to /voice endpoint below
   
   res.send('Added');
 });
@@ -27,6 +27,9 @@ app.post('/voice', (req, res) => {
     return res.status(400).send('Bad format - use: Ara Hulk starburst one at 2100 owes');
   }
   
+  // Google Apps Script endpoint that updates the Google Sheet
+  // Script ID: AKfycbxMVX5F3_JE8aoVXJUgbXLPx6qYPDxqKeUvdz7dxAZlhCEUyZiOA_DYcbudJN3ZG4pOeA
+  // Note: The actual Google Sheet name is configured within the Apps Script project
   fetch('https://script.google.com/macros/s/AKfycbxMVX5F3_JE8aoVXJUgbXLPx6qYPDxqKeUvdz7dxAZlhCEUyZiOA_DYcbudJN3ZG4pOeA/exec', {
     method: 'POST',
     headers: {
