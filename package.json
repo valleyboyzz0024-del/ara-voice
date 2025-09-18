@@ -4,8 +4,8 @@
   "description": "Voice-to-Google-Sheets application with speech recognition and real-time data processing",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js",
+    "start": "node server.js",
+    "dev": "node server.js",
     "test": "node -e \"console.log('No tests specified')\""
   },
   "keywords": [
@@ -21,6 +21,9 @@
     "node": "18.x"
   },
   "dependencies": {
+    "axios": "^1.12.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
     "express": "^4.18.2"
   },
   "repository": {
