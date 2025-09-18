@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ara Voice - Voice to Google Sheets</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .voice-controls {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .voice-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+            transition: background-color 0.3s;
+        }
+        .voice-button:hover {
+            background: #45a049;
+        }
+        .voice-button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .recording {
+            background: #f44336 !important;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .transcript-area {
+            width: 100%;
+            min-height: 120px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            resize: vertical;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .manual-input {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .submit-button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .submit-button:hover {
+            background: #1976D2;
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Ara Voice - Voice to Google Sheets</h1>
+        
+        <div class="instructions">
+            <h3>How to use:</h3>
+            <p>Click "Start Recording" and speak your command. The app will transcribe your voice and send it to the backend for processing.</p>
+            <p><strong>Example command format:</strong> "Add 5 units of apples at $2.50 each to inventory"</p>
+        </div>
+
+        <div class="voice-controls">
+            <button id="startBtn" class="voice-button">🎤 Start Recording</button>
+            <button id="stopBtn" class="voice-button" disabled>⏹️ Stop Recording</button>
+        </div>
+
+        <textarea id="transcript" class="transcript-area" placeholder="Your voice transcript will appear here..."></textarea>
+        
+        <div id="status"></div>
+
+        <div class="manual-input">
+            <h3>Manual Input (Alternative)</h3>
+            <div class="form-group">
+                <label for="manualText">Command Text:</label>
+                <input type="text" id="manualText" placeholder="Enter your command manually">
+            </div>
+            <button id="submitBtn" class="submit-button">Submit Command</button>
+        </div>
+    </div>
+
+    <script>
+        // Speech Recognition Setup
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        
+        // Elements
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const transcript = document.getElementById('transcript');
+        const status = document.getElementById('status');
+        const manualText = document.getElementById('manualText');
+        const submitBtn = document.getElementById('submitBtn');
+
+        // Speech Recognition Configuration
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        let isRecording = false;
+        let finalTranscript = '';
+
+        // Status Helper Functions
+        function showStatus(message, type = 'info') {
+            status.innerHTML = `<div class="status ${type}">${message}</div>`;
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => status.innerHTML = '', 5000);
+            }
+        }
+
+        // Speech Recognition Event Handlers
+        recognition.onstart = function() {
+            isRecording = true;
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            startBtn.classList.add('recording');
+            showStatus('🎤 Listening... Speak now!', 'info');
+        };
+
+        recognition.onresult = function(event) {
+            let interimTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcriptPart = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcriptPart + ' ';
+                } else {
+                    interimTranscript += transcriptPart;
+                }
+            }
+            
+            transcript.value = finalTranscript + interimTranscript;
+        };
+
+        recognition.onerror = function(event) {
+            console.error('Speech recognition error:', event.error);
+            showStatus(`❌ Error: ${event.error}. Please try again.`, 'error');
+            resetRecording();
+        };
+
+        recognition.onend = function() {
+            if (isRecording) {
+                showStatus('🔄 Processing your command...', 'info');
+                processCommand(finalTranscript.trim());
+            }
+            resetRecording();
+        };
+
+        // Control Functions
+        function resetRecording() {
+            isRecording = false;
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            startBtn.classList.remove('recording');
+        }
+
+        // Process Command Function
+        async function processCommand(text) {
+            if (!text) {
+                showStatus('❌ No text to process. Please speak your command.', 'error');
+                return;
+            }
+
+            try {
+                showStatus('🔄 Sending to backend...', 'info');
+                
+                const response = await fetch('/process-command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        transcript: text,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+
+                const result = await response.text();
+                
+                if (response.ok) {
+                    showStatus(`✅ Success: ${result}`, 'success');
+                    transcript.value = ''; // Clear transcript on success
+                    finalTranscript = '';
+                } else {
+                    throw new Error(`Server error: ${response.status} - ${result}`);
+                }
+            } catch (error) {
+                console.error('Error processing command:', error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Event Listeners
+        startBtn.addEventListener('click', function() {
+            if (!SpeechRecognition) {
+                showStatus('❌ Speech recognition not supported in this browser. Please use Chrome, Edge, or Safari.', 'error');
+                return;
+            }
+            
+            finalTranscript = '';
+            transcript.value = '';
+            recognition.start();
+        });
+
+        stopBtn.addEventListener('click', function() {
+            recognition.stop();
+        });
+
+        submitBtn.addEventListener('click', function() {
+            const text = manualText.value.trim();
+            if (text) {
+                processCommand(text);
+                manualText.value = '';
+            } else {
+                showStatus('❌ Please enter a command text.', 'error');
+            }
+        });
+
+        // Enter key support for manual input
+        manualText.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitBtn.click();
+            }
+        });
+
+        // Initialize
+        showStatus('🚀 Ready! Click "Start Recording" to begin or use manual input below.', 'success');
+    </script>
+</body>
+</html>
