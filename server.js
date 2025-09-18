@@ -70,21 +70,33 @@ app.post('/voice-command', async (req, res) => {
     const timeoutId = setTimeout(() => controller.abort(), config.requestTimeout);
     
     try {
-      // Send data to Google Apps Script based on action type
-      const response = await axios.post(
-        config.googleAppsScriptUrl,
-        {
-          action: commandData.action,
-          ...commandData
-        },
-        { 
-          signal: controller.signal,
-          headers: {
-            'Content-Type': 'application/json'
+      // Send data to Google Apps Script based on action type (skip if in test mode)
+      let response;
+      if (config.googleAppsScriptUrl.includes('test-mode') || config.googleAppsScriptUrl.includes('localhost')) {
+        // Mock response for testing
+        response = {
+          data: {
+            status: 'success',
+            message: `Mock: ${commandData.action} operation completed successfully`,
+            data: commandData
+          }
+        };
+      } else {
+        response = await axios.post(
+          config.googleAppsScriptUrl,
+          {
+            action: commandData.action,
+            ...commandData
           },
-          timeout: config.requestTimeout
-        }
-      );
+          { 
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            timeout: config.requestTimeout
+          }
+        );
+      }
       
       clearTimeout(timeoutId);
       
@@ -294,15 +306,23 @@ function mockAIProcessing(naturalCommand, sessionId) {
   
   // Simple pattern matching for demo
   if (command.includes('add') && (command.includes('to') || command.includes('list'))) {
-    // Extract item and quantity using simple regex
-    const qtyMatch = command.match(/(\d+(?:\.\d+)?)\s*(?:kilo|kg|k)/);
+    // Extract quantity using regex
+    const qtyMatch = command.match(/(\d+(?:\.\d+)?)\s*(?:kilo|kg|k|kilos)/);
     const qty = qtyMatch ? parseFloat(qtyMatch[1]) : 1;
     
-    // Extract item name (word before quantity or after "add")
+    // Extract item name - look for pattern: "kilos of [item]" or after "add"
     let item = 'item';
-    const itemMatch = command.match(/add\s+(?:(\d+(?:\.\d+)?)\s*(?:kilo|kg|k)\s+(?:of\s+)?)?([a-zA-Z\s]+?)(?:\s+to|\s+\d|$)/);
-    if (itemMatch && itemMatch[2]) {
-      item = itemMatch[2].trim();
+    
+    // First try: "kilos of apples"
+    let itemMatch = command.match(/(?:kilo|kg|k|kilos)\s+(?:of\s+)?([a-zA-Z]+)/);
+    if (itemMatch && itemMatch[1]) {
+      item = itemMatch[1].trim();
+    } else {
+      // Second try: "add apples"
+      itemMatch = command.match(/add\s+([a-zA-Z]+)/);
+      if (itemMatch && itemMatch[1]) {
+        item = itemMatch[1].trim();
+      }
     }
     
     // Extract tab name
@@ -396,21 +416,33 @@ app.post('/process-command', async (req, res) => {
     const timeoutId = setTimeout(() => controller.abort(), config.requestTimeout);
     
     try {
-      // Send data to Google Apps Script
-      const response = await axios.post(
-        config.googleAppsScriptUrl,
-        {
-          tabName: tab,
-          item: item,
-          qty: qty,
-          pricePerKg: price,
-          status: status
-        },
-        { 
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal
-        }
-      );
+      // Send data to Google Apps Script (skip if in test mode)
+      let response;
+      if (config.googleAppsScriptUrl.includes('test-mode') || config.googleAppsScriptUrl.includes('localhost')) {
+        // Mock response for testing
+        response = {
+          data: {
+            status: 'success',
+            message: `Mock: Legacy command processed successfully`,
+            data: { tab, item, qty, pricePerKg: price, status }
+          }
+        };
+      } else {
+        response = await axios.post(
+          config.googleAppsScriptUrl,
+          {
+            tabName: tab,
+            item: item,
+            qty: qty,
+            pricePerKg: price,
+            status: status
+          },
+          { 
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal
+          }
+        );
+      }
       
       clearTimeout(timeoutId);
       console.log('Successfully sent to Google Sheets');

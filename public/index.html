@@ -24,18 +24,27 @@
       </div>
       
       <div class="command-guide">
-        <h2>Voice Command Format</h2>
+        <h2>Natural Language Commands</h2>
         <div class="command-format">
-          <code>pickle prince pepsi [tab] [item] [quantity] at [price] [status]</code>
+          <p>Speak naturally! The system understands conversational commands.</p>
         </div>
-        <p class="example">Example: "pickle prince pepsi groceries apples 2.5 at 1200 owes"</p>
+        <div class="examples">
+          <h3>Example Commands:</h3>
+          <ul>
+            <li>"Add 2 kilos of apples to my grocery list"</li>
+            <li>"Put 1.5 kg of bananas in groceries at 800 per kilo, status owes"</li>
+            <li>"Show me my shopping list"</li>
+            <li>"Delete the last item I added"</li>
+            <li>"Create a new sheet for work projects"</li>
+          </ul>
+        </div>
         <div class="result-preview">
-          <h3>Will create:</h3>
+          <h3>The system extracts:</h3>
           <pre>{
 "tabName": "groceries",
 "item": "apples", 
-"qty": 2.5,
-"pricePerKg": 1200,
+"qty": 2.0,
+"pricePerKg": 1000,
 "status": "owes"
 }</pre>
         </div>

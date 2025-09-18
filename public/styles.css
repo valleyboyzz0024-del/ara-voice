@@ -181,6 +181,32 @@ main {
   margin-bottom: 1.5rem;
 }
 
+.examples {
+  margin-bottom: 1.5rem;
+}
+
+.examples h3 {
+  color: var(--dark);
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.examples ul {
+  list-style: none;
+  padding: 0;
+}
+
+.examples li {
+  background: #f8f9fa;
+  margin-bottom: 0.5rem;
+  padding: 0.8rem;
+  border-radius: 5px;
+  border-left: 3px solid var(--primary);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.9rem;
+  color: var(--dark);
+}
+
 .result-preview {
   background: #e8f5e8;
   padding: 1.5rem;
