@@ -32,7 +32,9 @@ Ara Voice is an intelligent voice-to-Google-Sheets application that understands 
 ```
 
 ### 🔄 **Backwards Compatible**
-- Supports legacy "pickle prince pepsi" command format
+- Supports legacy "pickle prince pepsi" command format (deprecated)
+- **New trigger phrase**: "people purple dance keyboard pig"
+- Multiple authentication methods for flexibility
 - Existing voice recognition interface works unchanged
 - Gradual migration path for existing users
 
@@ -74,6 +76,11 @@ GOOGLE_APPS_SCRIPT_URL=https://script.google.com/macros/s/AKfycbzN07Imi1MgdHo11q
 # Port for the Node.js server
 PORT=3000
 
+# Authentication Configuration
+SECRET_KEY=pickle prince pepsi
+BEARER_TOKEN=your-secure-bearer-token-here
+SPOKEN_PIN=1234
+
 # OpenAI API Configuration (Optional - uses mock AI if not provided)
 OPENAI_API_KEY=your_openai_api_key_here
 ```
@@ -87,6 +94,51 @@ npm start
 The server will start on `http://localhost:3000`
 
 ## 🔧 API Endpoints
+
+### 🆕 `POST /webhook/voice` (Webhook with Authentication)
+Secure webhook endpoint for voice commands with Bearer token and PIN authentication.
+
+**Authentication Methods:**
+1. **Bearer Token** (Primary): Include `Authorization: Bearer your-token` header
+2. **Spoken PIN** (Backup): Start command with PIN followed by voice command
+
+**Request with Bearer Token:**
+```json
+{
+  "command": "people purple dance keyboard pig groceries apples 2.5 at 1200 pending"
+}
+```
+**Headers:**
+```
+Authorization: Bearer your-secure-bearer-token
+Content-Type: application/json
+```
+
+**Request with Spoken PIN:**
+```json
+{
+  "command": "1234 people purple dance keyboard pig groceries apples 2.5 at 1200 pending"
+}
+```
+
+**Success Response:**
+```json
+{
+  "status": "success",
+  "message": "Command processed successfully via webhook",
+  "authMethod": "Bearer token",
+  "data": {
+    "parsed": {
+      "tab": "groceries",
+      "item": "apples",
+      "qty": 2.5,
+      "price": 1200,
+      "status": "pending"
+    },
+    "sheets_response": {...}
+  }
+}
+```
 
 ### 🆕 `POST /voice-command` (Conversational AI)
 Main endpoint for natural language voice commands.
@@ -128,11 +180,12 @@ Backwards compatible endpoint for structured commands.
 **Request:**
 ```json
 {
-  "command": "pickle prince pepsi groceries apples 2.5 at 1200 owes"
+  "command": "people purple dance keyboard pig groceries apples 2.5 at 1200 owes"
 }
 ```
 
 ### 📋 Other Endpoints
+- `POST /webhook/voice` - Secure webhook with Bearer token/PIN authentication
 - `GET /health` - Health check
 - `GET /config` - Configuration status
 
@@ -197,6 +250,9 @@ Set these environment variables in your deployment platform:
 - `GOOGLE_APPS_SCRIPT_URL`: Your deployed Google Apps Script Web App URL
 - `PORT`: Server port (usually set automatically by hosting platforms)
 - `OPENAI_API_KEY`: Optional - OpenAI API key for enhanced AI processing
+- `SECRET_KEY`: Legacy authentication key (default: "pickle prince pepsi")
+- `BEARER_TOKEN`: Secure token for webhook authentication
+- `SPOKEN_PIN`: Numeric PIN for voice authentication fallback (default: "1234")
 
 ## 🧪 Testing
 
