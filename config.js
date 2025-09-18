@@ -13,9 +13,10 @@ const config = {
     port: process.env.PORT || 3000
   },
   auth: {
-    secretKey: process.env.SECRET_KEY || 'pickle prince pepsi',
+    secretPhrase: process.env.SECRET_PHRASE || 'purple people dance keyboard pig',
+    secretKey: process.env.SECRET_KEY || 'pickle prince pepsi', // Legacy support
     bearerToken: process.env.BEARER_TOKEN || 'default-bearer-token',
-    spokenPin: process.env.SPOKEN_PIN || '1234'
+    spokenPin: process.env.SPOKEN_PIN || '1279572380'
   },
   googleAppsScript: {
     url: process.env.GOOGLE_APPS_SCRIPT_URL,

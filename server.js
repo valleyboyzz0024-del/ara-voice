@@ -5,7 +5,7 @@ const axios = require('axios');
 const axiosRetry = require('axios-retry').default;
 const OpenAI = require('openai');
 const config = require('./config');
-const { validateAuth, validateBearerToken, validateSpokenPin, parseVoiceCommand, sendToGoogleSheets } = require('./index');
+const { validateAuth, validateBearerToken, validateSpokenPin, validateSecretPhrase, parseVoiceCommand, sendToGoogleSheets } = require('./index');
 
 // Configure axios retry for resilient Google Apps Script requests
 axiosRetry(axios, {
@@ -63,13 +63,32 @@ app.post('/webhook/voice', async (req, res) => {
     let authMethod = '';
     const sessionId = req.headers['x-session-id'] || 'default';
     
-    // Primary authentication: Bearer token
-    if (validateBearerToken(req.headers.authorization)) {
+    // Primary authentication: Secret phrase in command
+    if (req.body.command && typeof req.body.command === 'string') {
+      // Check for secret phrase authentication
+      if (validateSecretPhrase(req.body.command.trim())) {
+        isAuthenticated = true;
+        authMethod = 'Secret phrase';
+        
+        // If command is exactly the secret phrase, return success without processing
+        if (req.body.command.trim().toLowerCase() === config.auth.secretPhrase.toLowerCase()) {
+          return res.json({
+            status: 'success',
+            message: 'Secret phrase authenticated. You can now send your voice command.',
+            authMethod: 'Secret phrase'
+          });
+        }
+      }
+    }
+    
+    // Secondary authentication: Bearer token
+    if (!isAuthenticated && validateBearerToken(req.headers.authorization)) {
       isAuthenticated = true;
       authMethod = 'Bearer token';
     }
-    // Backup authentication: Spoken PIN in command
-    else if (req.body.command && typeof req.body.command === 'string') {
+    
+    // Fallback authentication: Spoken PIN in command  
+    if (!isAuthenticated && req.body.command && typeof req.body.command === 'string') {
       const words = req.body.command.toLowerCase().trim().split(/\s+/);
       
       // Check if command starts with "pin is [PIN]"
@@ -104,8 +123,12 @@ app.post('/webhook/voice', async (req, res) => {
     if (!isAuthenticated) {
       return res.status(401).json({
         status: 'error',
-        message: 'Authentication required. Provide Bearer token in Authorization header or spoken PIN with "pin is 1234".',
-        authMethods: ['Bearer token in Authorization header', 'Spoken PIN: "pin is [PIN]"']
+        message: 'Authentication required. Use secret phrase, Bearer token in Authorization header, or spoken PIN with "pin is [PIN]".',
+        authMethods: [
+          'Secret phrase: "purple people dance keyboard pig"', 
+          'Bearer token in Authorization header', 
+          `Spoken PIN: "pin is ${config.auth.spokenPin}"`
+        ]
       });
     }
     
@@ -352,9 +375,32 @@ Examples:
     
   } catch (error) {
     console.error('Error in AI processing:', error);
+    
+    // Handle specific OpenAI API errors
+    if (error.status === 401) {
+      return {
+        success: false,
+        error: 'OpenAI API key is invalid or expired. Please check your OPENAI_API_KEY environment variable.',
+        errorType: 'API_KEY_ERROR'
+      };
+    } else if (error.status === 429) {
+      return {
+        success: false,
+        error: 'OpenAI API rate limit exceeded. Please try again later.',
+        errorType: 'RATE_LIMIT_ERROR'
+      };
+    } else if (error.status >= 500) {
+      return {
+        success: false,
+        error: 'OpenAI service is temporarily unavailable. Please try again later.',
+        errorType: 'SERVICE_ERROR'
+      };
+    }
+    
     return {
       success: false,
-      error: `AI processing failed: ${error.message}`
+      error: `AI processing failed: ${error.message}`,
+      errorType: 'GENERAL_ERROR'
     };
   }
 }
