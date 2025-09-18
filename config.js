@@ -13,15 +13,18 @@ const config = {
     port: process.env.PORT || 3000
   },
   auth: {
-    secretKey: process.env.SECRET_KEY || 'pickle prince pepsi'
+    secretKey: process.env.SECRET_KEY || 'pickle prince pepsi',
+    bearerToken: process.env.BEARER_TOKEN || 'default-bearer-token',
+    spokenPin: process.env.SPOKEN_PIN || '1234'
   },
   googleAppsScript: {
     url: process.env.GOOGLE_APPS_SCRIPT_URL,
     timeout: parseInt(process.env.REQUEST_TIMEOUT) || 10000
   },
   voice: {
-    expectedFormat: 'pickle prince pepsi [tab] [item] [qty] at [price] [status]',
-    minimumWords: 8
+    triggerPhrase: ['people', 'purple', 'dance', 'keyboard', 'pig'],
+    expectedFormat: 'people purple dance keyboard pig [tab] [item] [qty] at [price] [status]',
+    minimumWords: 10
   }
 };
 
