@@ -1,9 +1,15 @@
 /**
- * Voice-to-Google-Sheets Backend Server
+ * LEGACY Voice-to-Google-Sheets Backend Server
+ * 
+ * NOTE: This is a legacy/alternative implementation kept for compatibility.
+ * The primary server implementation is in server.js (which includes AI features).
  * 
  * This Express.js server receives voice commands from the frontend,
  * processes them, and sends the data to a Google Apps Script Web App
  * to update a Google Sheet.
+ * 
+ * To run this server directly: node index.js
+ * For primary server with AI features: npm start (or node server.js)
  */
 
 const express = require('express');
