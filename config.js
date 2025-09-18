@@ -7,13 +7,15 @@ const config = {
   port: process.env.PORT || 3000,
   requestTimeout: parseInt(process.env.REQUEST_TIMEOUT) || 10000,
   openaiApiKey: process.env.OPENAI_API_KEY,
+  bearerToken: process.env.BEARER_TOKEN, // Add bearer token to flat structure
   
   // Nested structure (for index.js compatibility)
   server: {
     port: process.env.PORT || 3000
   },
   auth: {
-    secretKey: process.env.SECRET_KEY || 'pickle prince pepsi'
+    secretKey: process.env.SECRET_KEY || 'pickle prince pepsi',
+    bearerToken: process.env.BEARER_TOKEN
   },
   googleAppsScript: {
     url: process.env.GOOGLE_APPS_SCRIPT_URL,

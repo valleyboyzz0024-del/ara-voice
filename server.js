@@ -545,6 +545,155 @@ app.post('/api/voice-data', async (req, res) => {
   }
 });
 
+/**
+ * Validates Bearer token from Authorization header
+ * @param {string} authHeader - The Authorization header value
+ * @returns {boolean} - Whether the bearer token is valid
+ */
+function validateBearerToken(authHeader) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return false;
+  }
+  
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  return token === config.auth.bearerToken;
+}
+
+/**
+ * Middleware to authenticate Bearer token
+ */
+function authenticateBearer(req, res, next) {
+  if (!config.auth.bearerToken) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Bearer token authentication not configured'
+    });
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!validateBearerToken(authHeader)) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Invalid or missing Bearer token'
+    });
+  }
+
+  next();
+}
+
+/**
+ * Webhook endpoint with Bearer token authentication
+ */
+app.post('/webhook/voice', authenticateBearer, async (req, res) => {
+  try {
+    console.log('Received webhook voice command:', req.body);
+    
+    // Validate request body
+    if (!req.body.command && !req.body.transcript) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'No valid command or transcript provided' 
+      });
+    }
+
+    // Use command or transcript (for backward compatibility)
+    const command = req.body.command || req.body.transcript;
+    
+    if (!command || typeof command !== 'string') {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'No valid command provided' 
+      });
+    }
+    
+    const sessionId = req.body.sessionId || 'webhook-session';
+    
+    // Process command with AI (same logic as /voice-command)
+    const aiResult = await processNaturalLanguageCommand(command, sessionId);
+    
+    if (!aiResult.success) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: aiResult.error,
+        needsClarification: aiResult.needsClarification || false
+      });
+    }
+    
+    const commandData = aiResult.data;
+    console.log('AI processed webhook command:', commandData);
+    
+    // Create abort controller for timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), config.requestTimeout);
+    
+    try {
+      // Send data to Google Apps Script based on action type (skip if in test mode)
+      let response;
+      if (config.googleAppsScriptUrl.includes('test-mode') || config.googleAppsScriptUrl.includes('localhost')) {
+        // Mock response for testing
+        response = {
+          data: {
+            status: 'success',
+            message: `Mock: ${commandData.action} operation completed successfully`,
+            data: commandData
+          }
+        };
+      } else {
+        response = await axios.post(
+          config.googleAppsScriptUrl,
+          {
+            action: commandData.action,
+            ...commandData
+          },
+          { 
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            timeout: config.requestTimeout
+          }
+        );
+      }
+      
+      clearTimeout(timeoutId);
+      console.log('Google Apps Script response:', response.data);
+      
+      res.status(200).json({
+        status: 'success',
+        message: 'Webhook command processed successfully',
+        data: {
+          original_command: command,
+          interpreted_action: commandData,
+          sheets_response: response.data
+        }
+      });
+      
+    } catch (sheetsError) {
+      clearTimeout(timeoutId);
+      console.error('Google Apps Script error in webhook:', sheetsError);
+      
+      if (sheetsError.name === 'AbortError') {
+        return res.status(504).json({ 
+          status: 'error', 
+          message: 'Request to Google Sheets timed out' 
+        });
+      }
+      
+      res.status(502).json({ 
+        status: 'error', 
+        message: `Failed to update Google Sheets: ${sheetsError.message}` 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Unexpected error in /webhook/voice:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+});
+
 // Start server
 const PORT = config.port;
 app.listen(PORT, () => {
