@@ -3,6 +3,25 @@ const app = express();
 
 app.use(express.json());
 
+// Helper function to convert text numbers to numeric values
+function textToNumber(text) {
+  const textNumbers = {
+    'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+    'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+    'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
+    'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20
+  };
+  
+  const lower = text.toLowerCase();
+  if (textNumbers.hasOwnProperty(lower)) {
+    return textNumbers[lower];
+  }
+  
+  // Try to parse as a regular number
+  const num = parseFloat(text);
+  return isNaN(num) ? null : num;
+}
+
 app.post('/ara', (req, res) => {
   const { tab, item, qty, price, status } = req.body;
   if (req.body.key !== 'Bruins') return res.status(403).send('Wrong key');
@@ -19,11 +38,11 @@ app.post('/voice', (req, res) => {
   const words = req.body.transcript.toLowerCase().split(' ');
   const tab = words[1];
   const item = words[2];
-  const qty = parseFloat(words[3]);
+  const qty = textToNumber(words[3]);
   const price = parseInt(words[5]);
   const status = words[6];
   
-  if (!tab || !item || isNaN(qty) || isNaN(price)) {
+  if (!tab || !item || qty === null || isNaN(price)) {
     return res.status(400).send('Bad format - use: Ara Hulk starburst one at 2100 owes');
   }
   
