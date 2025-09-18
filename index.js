@@ -6,7 +6,7 @@ app.use(express.static("public"));
 
 app.post('/ara', (req, res) => {
   const { tab, item, qty, price, status } = req.body;
-  if (req.body.key !== 'Bruins') return res.status(403).send('Wrong key');
+  if (req.body.key !== 'pickle prince pepsi') return res.status(403).send('Wrong key');
   
   console.log(`Voice update: ${tab} | ${item} | ${qty}kg | $${price}/kg | ${status}`);
   // Later: this will hit your Google Sheet
@@ -15,7 +15,7 @@ app.post('/ara', (req, res) => {
 });
 
 app.post('/voice', (req, res) => {
-  if (req.body.key !== 'Bruins') return res.status(403).send('Wrong key');
+  if (req.body.key !== 'pickle prince pepsi') return res.status(403).send('Wrong key');
   
   const words = req.body.transcript.toLowerCase().split(' ');
   const tab = words[1];
@@ -25,7 +25,7 @@ app.post('/voice', (req, res) => {
   const status = words[6];
   
   if (!tab || !item || isNaN(qty) || isNaN(price)) {
-    return res.status(400).send('Bad format - use: Ara Hulk starburst one at 2100 owes');
+    return res.status(400).send('Bad format - use: pickle prince pepsi Hulk starburst one at 2100 owes');
   }
   
   fetch('https://script.google.com/macros/s/AKfycbxMVX5F3_JE8aoVXJUgbXLPx6qYPDxqKeUvdz7dxAZlhCEUyZiOA_DYcbudJN3ZG4pOeA/exec', {
@@ -55,19 +55,19 @@ app.post('/process-command', (req, res) => {
   const words = req.body.command.toLowerCase().split(' ');
   console.log('Parsed words:', words);
   
-  // Expected format: "Ara [tab] [item] [qty] at [price] [status]"
-  if (words.length < 6 || words[0] !== 'ara') {
+  // Expected format: "pickle prince pepsi [tab] [item] [qty] at [price] [status]"
+  if (words.length < 8 || words[0] !== 'pickle' || words[1] !== 'prince' || words[2] !== 'pepsi') {
     return res.status(400).json({ 
       status: 'error', 
-      message: 'Bad format - use: Ara [tab] [item] [qty] at [price] [status]' 
+      message: 'Bad format - use: pickle prince pepsi [tab] [item] [qty] at [price] [status]' 
     });
   }
   
-  const tab = words[1];
-  const item = words[2];
-  const qty = parseFloat(words[3]);
-  const price = parseInt(words[5]);
-  const status = words[6];
+  const tab = words[3];
+  const item = words[4];
+  const qty = parseFloat(words[5]);
+  const price = parseInt(words[7]);
+  const status = words[8];
   
   if (!tab || !item || isNaN(qty) || isNaN(price)) {
     return res.status(400).json({ 
