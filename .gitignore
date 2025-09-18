@@ -1,6 +1,11 @@
+# Ignore environment variables file
+.env
+
+# Ignore Node.js dependencies
 node_modules/
 package-lock.json
-.env
+
+# System files
 .DS_Store
 *.log
 tmp/
