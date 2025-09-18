@@ -3,6 +3,25 @@ const app = express();
 
 app.use(express.json());
 
+// Word to number conversion for voice input
+function wordToNumber(word) {
+  const numberWords = {
+    'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+    'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+    'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
+    'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20
+  };
+  
+  const lowerWord = word.toLowerCase();
+  if (numberWords.hasOwnProperty(lowerWord)) {
+    return numberWords[lowerWord];
+  }
+  
+  // Try to parse as number directly
+  const num = parseFloat(word);
+  return isNaN(num) ? null : num;
+}
+
 app.post('/ara', (req, res) => {
   const { tab, item, qty, price, status } = req.body;
   if (req.body.key !== 'Bruins') return res.status(403).send('Wrong key');
@@ -17,13 +36,18 @@ app.post('/voice', (req, res) => {
   if (req.body.key !== 'Bruins') return res.status(403).send('Wrong key');
   
   const words = req.body.transcript.toLowerCase().split(' ');
+  console.log('Voice transcript words:', words);
+  
   const tab = words[1];
   const item = words[2];
-  const qty = parseFloat(words[3]);
+  const qtyWord = words[3];
+  const qty = wordToNumber(qtyWord);
   const price = parseInt(words[5]);
   const status = words[6];
   
-  if (!tab || !item || isNaN(qty) || isNaN(price)) {
+  console.log(`Parsed: tab=${tab}, item=${item}, qty=${qty} (from "${qtyWord}"), price=${price}, status=${status}`);
+  
+  if (!tab || !item || qty === null || isNaN(price) || !status) {
     return res.status(400).send('Bad format - use: Ara Hulk starburst one at 2100 owes');
   }
   
