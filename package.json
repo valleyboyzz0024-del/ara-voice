@@ -1,14 +1,30 @@
 {
   "name": "ara-voice",
   "version": "1.0.0",
+  "description": "Voice-to-Google-Sheets application with speech recognition and real-time data processing",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node index.js",
+    "test": "node -e \"console.log('No tests specified')\""
   },
+  "keywords": [
+    "voice",
+    "speech-recognition",
+    "google-sheets",
+    "express",
+    "node"
+  ],
+  "author": "Voice-to-Sheets Team",
+  "license": "MIT",
   "engines": {
     "node": "18.x"
   },
   "dependencies": {
     "express": "^4.18.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/valleyboyzz0024-del/ara-voice.git"
   }
 }
