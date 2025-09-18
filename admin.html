@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ara-Voice Admin Panel</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e1e5e9;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background: #5a6fd8;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #e9ecef;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+        }
+        .tab.active {
+            background: white;
+            border-bottom: 2px solid #667eea;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-healthy { background-color: #28a745; }
+        .status-warning { background-color: #ffc107; }
+        .status-error { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎯 Ara-Voice Admin Panel</h1>
+        <p>AI-Enhanced Inventory Management System</p>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" onclick="showTab('voice-test')">Voice Testing</button>
+        <button class="tab" onclick="showTab('direct-entry')">Direct Entry</button>
+        <button class="tab" onclick="showTab('system-status')">System Status</button>
+        <button class="tab" onclick="showTab('configuration')">Configuration</button>
+    </div>
+
+    <div id="voice-test" class="tab-content active">
+        <div class="card">
+            <h2>🎤 Voice Command Testing</h2>
+            <p>Test voice commands and see how they're parsed by the AI system.</p>
+            
+            <div class="form-group">
+                <label for="apiKey">API Key:</label>
+                <input type="password" id="apiKey" placeholder="Enter your API key" value="Bruins">
+            </div>
+            
+            <div class="form-group">
+                <label for="voiceCommand">Voice Command:</label>
+                <textarea id="voiceCommand" rows="3" placeholder="Example: Ara Hulk starburst one at 2100 owes"></textarea>
+            </div>
+            
+            <button onclick="testVoiceCommand()">🔍 Parse Command</button>
+            
+            <div id="voiceResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div id="direct-entry" class="tab-content">
+        <div class="card">
+            <h2>📝 Direct Inventory Entry</h2>
+            <p>Add inventory items directly with validation.</p>
+            
+            <div class="form-group">
+                <label for="directApiKey">API Key:</label>
+                <input type="password" id="directApiKey" placeholder="Enter your API key" value="Bruins">
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label for="tab">Tab:</label>
+                    <input type="text" id="tab" placeholder="e.g., hulk">
+                </div>
+                
+                <div class="form-group">
+                    <label for="item">Item:</label>
+                    <input type="text" id="item" placeholder="e.g., starburst">
+                </div>
+                
+                <div class="form-group">
+                    <label for="qty">Quantity (kg):</label>
+                    <input type="number" id="qty" step="0.1" placeholder="e.g., 1.5">
+                </div>
+                
+                <div class="form-group">
+                    <label for="price">Price (per kg):</label>
+                    <input type="number" id="price" placeholder="e.g., 2100">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="status">Status:</label>
+                <select id="status">
+                    <option value="owes">Owes</option>
+                    <option value="paid">Paid</option>
+                    <option value="pending">Pending</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
+            
+            <button onclick="submitDirectEntry()">➕ Add Entry</button>
+            
+            <div id="directResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div id="system-status" class="tab-content">
+        <div class="card">
+            <h2>🔍 System Status</h2>
+            <p>Monitor system health and feature availability.</p>
+            
+            <button onclick="checkSystemHealth()">🔄 Refresh Status</button>
+            
+            <div id="healthResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div id="configuration" class="tab-content">
+        <div class="card">
+            <h2>⚙️ System Configuration</h2>
+            <p>View current system configuration (requires API key).</p>
+            
+            <div class="form-group">
+                <label for="configApiKey">API Key:</label>
+                <input type="password" id="configApiKey" placeholder="Enter your API key" value="Bruins">
+            </div>
+            
+            <button onclick="viewConfiguration()">📋 View Config</button>
+            
+            <div id="configResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Set base URL for API calls
+        const BASE_URL = window.location.origin;
+
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+
+        async function testVoiceCommand() {
+            const apiKey = document.getElementById('apiKey').value;
+            const transcript = document.getElementById('voiceCommand').value;
+            const resultDiv = document.getElementById('voiceResult');
+            
+            if (!apiKey || !transcript) {
+                showResult(resultDiv, 'Please fill in all fields', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${BASE_URL}/voice`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        key: apiKey,
+                        transcript: transcript
+                    })
+                });
+                
+                const result = await response.json();
+                const status = response.ok ? 'success' : 'error';
+                showResult(resultDiv, JSON.stringify(result, null, 2), status);
+                
+            } catch (error) {
+                showResult(resultDiv, `Network error: ${error.message}`, 'error');
+            }
+        }
+
+        async function submitDirectEntry() {
+            const apiKey = document.getElementById('directApiKey').value;
+            const tab = document.getElementById('tab').value;
+            const item = document.getElementById('item').value;
+            const qty = parseFloat(document.getElementById('qty').value);
+            const price = parseInt(document.getElementById('price').value);
+            const status = document.getElementById('status').value;
+            const resultDiv = document.getElementById('directResult');
+            
+            if (!apiKey || !tab || !item || !qty || !price || !status) {
+                showResult(resultDiv, 'Please fill in all fields', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${BASE_URL}/ara`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        key: apiKey,
+                        tab: tab,
+                        item: item,
+                        qty: qty,
+                        price: price,
+                        status: status
+                    })
+                });
+                
+                const result = await response.json();
+                const status_class = response.ok ? 'success' : 'error';
+                showResult(resultDiv, JSON.stringify(result, null, 2), status_class);
+                
+            } catch (error) {
+                showResult(resultDiv, `Network error: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkSystemHealth() {
+            const resultDiv = document.getElementById('healthResult');
+            
+            try {
+                const response = await fetch(`${BASE_URL}/health`);
+                const result = await response.json();
+                
+                let statusHtml = `
+<div style="margin-bottom: 15px;">
+    <span class="status-indicator status-${result.status === 'healthy' ? 'healthy' : 'error'}"></span>
+    <strong>System Status:</strong> ${result.status.toUpperCase()}
+</div>
+
+<div style="margin-bottom: 15px;">
+    <strong>Timestamp:</strong> ${new Date(result.timestamp).toLocaleString()}
+</div>
+
+<div style="margin-bottom: 15px;">
+    <strong>AI Status:</strong> 
+    <span class="status-indicator status-${result.features.aiEnabled ? 'healthy' : 'warning'}"></span>
+    ${result.features.aiEnabled ? 'Enabled' : 'Disabled'} (${result.features.aiModel})
+</div>
+
+<div>
+    <strong>Active Features:</strong>
+    <ul style="margin: 10px 0; padding-left: 20px;">
+`;
+                
+                Object.entries(result.features.features).forEach(([feature, enabled]) => {
+                    if (enabled) {
+                        statusHtml += `<li>${feature}</li>`;
+                    }
+                });
+                
+                statusHtml += `</ul></div>`;
+                
+                resultDiv.innerHTML = statusHtml;
+                resultDiv.className = 'result success';
+                resultDiv.style.display = 'block';
+                
+            } catch (error) {
+                showResult(resultDiv, `Network error: ${error.message}`, 'error');
+            }
+        }
+
+        async function viewConfiguration() {
+            const apiKey = document.getElementById('configApiKey').value;
+            const resultDiv = document.getElementById('configResult');
+            
+            if (!apiKey) {
+                showResult(resultDiv, 'Please enter API key', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${BASE_URL}/config?key=${encodeURIComponent(apiKey)}`);
+                const result = await response.json();
+                const status = response.ok ? 'success' : 'error';
+                showResult(resultDiv, JSON.stringify(result, null, 2), status);
+                
+            } catch (error) {
+                showResult(resultDiv, `Network error: ${error.message}`, 'error');
+            }
+        }
+
+        function showResult(element, content, type) {
+            element.textContent = content;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+
+        // Auto-load system health on page load
+        window.addEventListener('load', checkSystemHealth);
+    </script>
+</body>
+</html>
