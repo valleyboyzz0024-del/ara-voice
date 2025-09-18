@@ -40,6 +40,18 @@ function validateSpokenPin(spokenPin) {
 }
 
 /**
+ * Validates secret phrase authentication
+ * @param {string} phrase - The provided secret phrase
+ * @returns {boolean} - Whether the phrase is valid
+ */
+function validateSecretPhrase(phrase) {
+  if (!phrase || typeof phrase !== 'string') {
+    return false;
+  }
+  return phrase.trim().toLowerCase() === config.auth.secretPhrase.toLowerCase();
+}
+
+/**
  * Parses voice command into structured data
  * @param {string} command - The voice command string
  * @returns {Object} - Parsed command data or error
@@ -146,6 +158,7 @@ module.exports = {
   validateAuth,
   validateBearerToken,
   validateSpokenPin,
+  validateSecretPhrase,
   parseVoiceCommand,
   sendToGoogleSheets
 };

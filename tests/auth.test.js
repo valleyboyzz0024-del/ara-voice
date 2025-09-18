@@ -1,7 +1,7 @@
 const request = require('supertest');
 const express = require('express');
 const config = require('../config');
-const { validateAuth, validateBearerToken, validateSpokenPin } = require('../index');
+const { validateAuth, validateBearerToken, validateSpokenPin, validateSecretPhrase } = require('../index');
 
 // Import server app - we need to create a test version
 const app = express();
@@ -14,13 +14,23 @@ app.post('/webhook/voice', async (req, res) => {
     let authMethod = '';
     const sessionId = req.headers['x-session-id'] || 'default';
     
-    // Primary authentication: Bearer token
-    if (validateBearerToken(req.headers.authorization)) {
+    // Primary authentication: Secret phrase in command
+    if (req.body.command && typeof req.body.command === 'string') {
+      // Check for secret phrase authentication
+      if (validateSecretPhrase(req.body.command.trim())) {
+        isAuthenticated = true;
+        authMethod = 'Secret phrase';
+      }
+    }
+    
+    // Secondary authentication: Bearer token
+    if (!isAuthenticated && validateBearerToken(req.headers.authorization)) {
       isAuthenticated = true;
       authMethod = 'Bearer token';
     }
-    // Backup authentication: Spoken PIN in command
-    else if (req.body.command && typeof req.body.command === 'string') {
+    
+    // Fallback authentication: Spoken PIN in command
+    if (!isAuthenticated && req.body.command && typeof req.body.command === 'string') {
       const words = req.body.command.toLowerCase().trim().split(/\s+/);
       
       // Check if command starts with "pin is [PIN]"
@@ -105,7 +115,7 @@ describe('Authentication Tests', () => {
   
   describe('validateSpokenPin function', () => {
     test('should return true for correct PIN', () => {
-      expect(validateSpokenPin('1234')).toBe(true);
+      expect(validateSpokenPin('1279572380')).toBe(true);
     });
     
     test('should return false for incorrect PIN', () => {
@@ -114,6 +124,32 @@ describe('Authentication Tests', () => {
     
     test('should return false for empty PIN', () => {
       expect(validateSpokenPin('')).toBe(false);
+    });
+  });
+  
+  describe('validateSecretPhrase function', () => {
+    test('should return true for correct secret phrase', () => {
+      expect(validateSecretPhrase('purple people dance keyboard pig')).toBe(true);
+    });
+    
+    test('should return true for correct secret phrase with different casing', () => {
+      expect(validateSecretPhrase('PURPLE PEOPLE DANCE KEYBOARD PIG')).toBe(true);
+    });
+    
+    test('should return true for correct secret phrase with extra whitespace', () => {
+      expect(validateSecretPhrase('  purple people dance keyboard pig  ')).toBe(true);
+    });
+    
+    test('should return false for incorrect secret phrase', () => {
+      expect(validateSecretPhrase('wrong secret phrase')).toBe(false);
+    });
+    
+    test('should return false for empty phrase', () => {
+      expect(validateSecretPhrase('')).toBe(false);
+    });
+    
+    test('should return false for null phrase', () => {
+      expect(validateSecretPhrase(null)).toBe(false);
     });
   });
   
@@ -149,10 +185,31 @@ describe('Authentication Tests', () => {
       expect(response.body.authMethod).toBe('Bearer token');
     });
     
+    test('should authenticate with correct secret phrase', async () => {
+      const response = await request(app)
+        .post('/webhook/voice')
+        .send({ command: 'purple people dance keyboard pig' });
+      
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('success');
+      expect(response.body.authMethod).toBe('Secret phrase');
+    });
+    
+    test('should prioritize secret phrase over bearer token', async () => {
+      const response = await request(app)
+        .post('/webhook/voice')
+        .set('Authorization', 'Bearer test-bearer-token')
+        .send({ command: 'purple people dance keyboard pig' });
+      
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('success');
+      expect(response.body.authMethod).toBe('Secret phrase');
+    });
+    
     test('should authenticate with correct spoken PIN', async () => {
       const response = await request(app)
         .post('/webhook/voice')
-        .send({ command: 'pin is 1234' });
+        .send({ command: 'pin is 1279572380' });
       
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('success');
