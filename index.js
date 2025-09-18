@@ -44,6 +44,10 @@ app.post('/voice', (req, res) => {
   .catch(() => res.status(500).send('Sheet down'));
 });
 
+app.get('/admin', (req, res) => {
+  res.send('Admin panel');
+});
+
 app.listen(10000, () => console.log('Ara server live'));
 
 
