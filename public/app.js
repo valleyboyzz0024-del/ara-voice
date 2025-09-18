@@ -56,34 +56,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   function parseVoiceCommand(text) {
-    // Expected format: "pickle prince pepsi [tab] [item] [qty] at [price] [status]"
-    const words = text.toLowerCase().trim().split(/\s+/);
-    
-    if (words.length < 8 || words[0] !== 'pickle' || words[1] !== 'prince' || words[2] !== 'pepsi') {
-      return null;
-    }
-    
-    const atIndex = words.indexOf('at');
-    if (atIndex === -1 || atIndex < 5) {
-      return null;
-    }
-    
-    const tabName = words[3];
-    const item = words.slice(4, atIndex - 1).join(' ');
-    const qty = parseFloat(words[atIndex - 1]);
-    const pricePerKg = parseFloat(words[atIndex + 1]);
-    const status = words.slice(atIndex + 2).join(' ');
-    
-    if (isNaN(qty) || isNaN(pricePerKg)) {
+    // Natural language processing - simply return the raw text
+    // The backend will handle parsing with AI
+    if (!text || text.trim().length === 0) {
       return null;
     }
     
     return {
-      tabName,
-      item,
-      qty,
-      pricePerKg,
-      status
+      command: text.trim(),
+      isNaturalLanguage: true
     };
   }
   
@@ -91,24 +72,37 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       updateStatus('processing', 'Processing command...');
       
-      const response = await fetch('/api/voice-data', {
+      const response = await fetch('/voice-command', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(commandData)
+        body: JSON.stringify({
+          command: commandData.command,
+          sessionId: 'web-session-' + Date.now()
+        })
       });
       
       const result = await response.json();
       
-      if (result.success) {
+      if (result.status === 'success') {
         updateStatus('success', 'Command processed successfully!');
+        
+        const interpretedAction = result.data.interpreted_action;
+        const sheetsResponse = result.data.sheets_response;
+        
         responseContainer.innerHTML = `
           <div class="success">
             <h3>✅ Success!</h3>
-            <p>Added ${commandData.qty}kg of ${commandData.item} to ${commandData.tabName}</p>
-            <p>Price: $${commandData.pricePerKg}/kg | Status: ${commandData.status}</p>
-            <p>Total: $${(commandData.qty * commandData.pricePerKg).toFixed(2)}</p>
+            <p><strong>Command:</strong> "${result.data.original_command}"</p>
+            <p><strong>Action:</strong> ${interpretedAction.action}</p>
+            ${interpretedAction.action === 'addRow' ? `
+              <p><strong>Details:</strong> Added ${interpretedAction.qty}kg of ${interpretedAction.item} to ${interpretedAction.tabName}</p>
+              <p><strong>Price:</strong> $${interpretedAction.pricePerKg}/kg | <strong>Status:</strong> ${interpretedAction.status}</p>
+              ${interpretedAction.qty && interpretedAction.pricePerKg ? `<p><strong>Total:</strong> $${(interpretedAction.qty * interpretedAction.pricePerKg).toFixed(2)}</p>` : ''}
+            ` : `
+              <p><strong>Details:</strong> ${sheetsResponse.message || 'Operation completed successfully'}</p>
+            `}
           </div>
         `;
         responseContainer.className = 'response-container success';
@@ -118,12 +112,23 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
       console.error('Error processing command:', error);
       updateStatus('error', `Error: ${error.message}`);
-      responseContainer.innerHTML = `
+      
+      let errorHTML = `
         <div class="error">
           <h3>❌ Error</h3>
           <p>${error.message}</p>
-        </div>
       `;
+      
+      // Handle specific error cases
+      if (error.message.includes('OpenAI') || error.message.includes('AI processing')) {
+        errorHTML += `
+          <p><strong>Note:</strong> Natural language processing requires an OpenAI API key. 
+          The system is currently using mock responses.</p>
+        `;
+      }
+      
+      errorHTML += `</div>`;
+      responseContainer.innerHTML = errorHTML;
       responseContainer.className = 'response-container error';
     }
   }
@@ -152,11 +157,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (commandData) {
         processVoiceCommand(commandData);
       } else {
-        updateStatus('error', 'Command format not recognized. Please try again.');
+        updateStatus('error', 'No command detected. Please try speaking again.');
         responseContainer.innerHTML = `
           <div class="error">
-            <h3>❌ Format Error</h3>
-            <p>Please use the format: "pickle prince pepsi [tab] [item] [qty] at [price] [status]"</p>
+            <h3>❌ No Command Detected</h3>
+            <p>Please try speaking your command again. Use natural language like:</p>
+            <ul>
+              <li>"Add 2 kilos of apples to my grocery list"</li>
+              <li>"Show me my shopping list"</li>
+              <li>"Delete the last item I added"</li>
+            </ul>
           </div>
         `;
         responseContainer.className = 'response-container error';
