@@ -5,95 +5,450 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voice to Sheets</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f0f2f5; margin: 0; text-align: center; }
-        #recordButton { width: 100px; height: 100px; border-radius: 50%; border: none; background: #007aff; color: white; font-size: 1.2em; cursor: pointer; transition: background-color 0.2s; }
-        #recordButton.recording { background: #dc3545; }
-        #status { margin-top: 20px; font-size: 1.2em; color: #333; height: 50px; }
+        /* Modern CSS Reset and Base Styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f0f2f5 0%, #e8ecf0 100%);
+            color: #333;
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 600px;
+            padding: 2rem;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin: 1rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #7f8c8d;
+            margin-bottom: 2rem;
+        }
+
+        #recordButton {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #007aff 0%, #005ecb 100%);
+            color: white;
+            font-size: 1.4em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 25px rgba(0, 122, 255, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #recordButton:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 35px rgba(0, 122, 255, 0.4);
+        }
+
+        #recordButton:active {
+            transform: translateY(0);
+        }
+
+        #recordButton.recording {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3); }
+            50% { box-shadow: 0 8px 35px rgba(220, 53, 69, 0.6); }
+            100% { box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3); }
+        }
+
+        #recordButton.processing {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            box-shadow: 0 8px 25px rgba(255, 193, 7, 0.3);
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 2rem;
+            font-size: 1.2em;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        #status.listening {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 2px solid #bbdefb;
+        }
+
+        #status.processing {
+            background: #fff3e0;
+            color: #f57c00;
+            border: 2px solid #ffcc02;
+        }
+
+        #status.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 2px solid #c8e6c9;
+        }
+
+        #status.error {
+            background: #ffebee;
+            color: #d32f2f;
+            border: 2px solid #ffcdd2;
+        }
+
+        .command-format {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #007aff;
+        }
+
+        .command-format h3 {
+            color: #495057;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .command-format code {
+            background: #e9ecef;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            color: #495057;
+        }
+
+        .command-example {
+            margin-top: 1rem;
+            font-style: italic;
+            color: #6c757d;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #007aff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-with-spinner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 0.5rem;
+                padding: 1.5rem;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            #recordButton {
+                width: 100px;
+                height: 100px;
+                font-size: 1.2em;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>Voice Controller</h1>
-    <button id="recordButton">Record</button>
-    <p id="status">Tap the button and speak your command.</p>
+    <div class="container">
+        <h1>🎤 Voice Controller</h1>
+        <p class="subtitle">Speak your commands to update Google Sheets</p>
+        
+        <button id="recordButton" aria-label="Record voice command">
+            <span id="buttonText">Record</span>
+        </button>
+        
+        <div id="status" role="status" aria-live="polite">
+            Tap the button and speak your command
+        </div>
+        
+        <div class="command-format">
+            <h3>📝 Command Format:</h3>
+            <code>pickle prince pepsi [tab] [item] [quantity] at [price] [status]</code>
+            <div class="command-example">
+                Example: "pickle prince pepsi groceries apples 2.5 at 1200 owes"
+            </div>
+        </div>
+    </div>
 
     <script>
-        console.log("Page script loaded.");
-
-        const recordButton = document.getElementById('recordButton');
-        const statusDiv = document.getElementById('status');
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        /**
+         * Voice-to-Sheets Frontend Application
+         * Handles speech recognition and server communication
+         */
         
-        if (SpeechRecognition) {
-            console.log("SpeechRecognition API is available.");
-            const recognition = new SpeechRecognition();
-            
-            recognition.continuous = false;
-            recognition.lang = 'en-US';
+        console.log("🚀 Voice Controller loaded");
 
-            recordButton.addEventListener('click', () => {
-                console.log("Record button clicked.");
-                if (recordButton.classList.contains('recording')) {
-                    recognition.stop();
-                    recordButton.classList.remove('recording');
-                } else {
-                    statusDiv.textContent = 'Listening...';
+        // DOM elements
+        const recordButton = document.getElementById('recordButton');
+        const buttonText = document.getElementById('buttonText');
+        const statusDiv = document.getElementById('status');
+        
+        // Speech recognition setup
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        let isProcessing = false;
+
+        /**
+         * Updates the status display with appropriate styling
+         * @param {string} message - The status message
+         * @param {string} type - The status type (listening, processing, success, error)
+         * @param {boolean} showSpinner - Whether to show loading spinner
+         */
+        function updateStatus(message, type = '', showSpinner = false) {
+            // Clear previous classes
+            statusDiv.className = '';
+            
+            // Add new class if specified
+            if (type) {
+                statusDiv.classList.add(type);
+            }
+            
+            // Update content
+            if (showSpinner) {
+                statusDiv.innerHTML = `
+                    <div class="status-with-spinner">
+                        ${message}
+                        <div class="loading-spinner"></div>
+                    </div>
+                `;
+                document.querySelector('.loading-spinner').style.display = 'inline-block';
+            } else {
+                statusDiv.textContent = message;
+            }
+            
+            console.log(`Status: [${type.toUpperCase()}] ${message}`);
+        }
+
+        /**
+         * Updates the record button state
+         * @param {string} state - Button state (idle, recording, processing)
+         */
+        function updateButtonState(state) {
+            recordButton.className = '';
+            
+            switch (state) {
+                case 'recording':
                     recordButton.classList.add('recording');
-                    recognition.start();
-                }
-            });
+                    buttonText.textContent = 'Stop';
+                    recordButton.disabled = false;
+                    break;
+                case 'processing':
+                    recordButton.classList.add('processing');
+                    buttonText.textContent = 'Processing';
+                    recordButton.disabled = true;
+                    break;
+                default: // idle
+                    buttonText.textContent = 'Record';
+                    recordButton.disabled = false;
+            }
+        }
+
+        // Initialize Speech Recognition
+        if (SpeechRecognition) {
+            console.log("✅ SpeechRecognition API is available");
+            
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+            recognition.maxAlternatives = 1;
+
+            // Event handlers
+            recognition.onstart = () => {
+                console.log("🎤 Speech recognition started");
+                updateStatus('Listening... Speak your command clearly', 'listening');
+                updateButtonState('recording');
+            };
 
             recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                console.log("Speech recognized:", transcript);
-                statusDiv.textContent = `Processing: "${transcript}"`;
+                const transcript = event.results[0][0].transcript.trim();
+                const confidence = event.results[0][0].confidence;
+                
+                console.log(`🗣️ Speech recognized: "${transcript}" (confidence: ${confidence.toFixed(2)})`);
+                
+                updateStatus(`Processing: "${transcript}"`, 'processing', true);
+                updateButtonState('processing');
+                isProcessing = true;
+                
                 sendCommand(transcript);
             };
 
             recognition.onerror = (event) => {
-                console.error("Speech recognition error:", event.error);
-                statusDiv.textContent = `Error: ${event.error}. Please try again.`;
-                recordButton.classList.remove('recording');
-
+                console.error("❌ Speech recognition error:", event.error);
+                
+                let errorMessage;
+                switch (event.error) {
+                    case 'no-speech':
+                        errorMessage = 'No speech detected. Please try again.';
+                        break;
+                    case 'audio-capture':
+                        errorMessage = 'Microphone not accessible. Check permissions.';
+                        break;
+                    case 'not-allowed':
+                        errorMessage = 'Microphone access denied. Please allow microphone access.';
+                        break;
+                    case 'network':
+                        errorMessage = 'Network error. Check your connection.';
+                        break;
+                    default:
+                        errorMessage = `Speech recognition error: ${event.error}`;
+                }
+                
+                updateStatus(errorMessage, 'error');
+                updateButtonState('idle');
+                isProcessing = false;
             };
             
             recognition.onend = () => {
-                console.log("Recognition ended.");
-                recordButton.classList.remove('recording');
+                console.log("🔚 Speech recognition ended");
+                if (!isProcessing) {
+                    updateStatus('Tap the button and speak your command');
+                    updateButtonState('idle');
+                }
             };
 
+            // Button click handler
+            recordButton.addEventListener('click', () => {
+                console.log("🖱️ Record button clicked");
+                
+                if (isProcessing) {
+                    console.log("⚠️ Still processing previous command");
+                    return;
+                }
+                
+                if (recordButton.classList.contains('recording')) {
+                    console.log("⏹️ Stopping recording");
+                    recognition.stop();
+                } else {
+                    console.log("▶️ Starting recording");
+                    try {
+                        recognition.start();
+                    } catch (error) {
+                        console.error("Failed to start recognition:", error);
+                        updateStatus('Failed to start recording. Please try again.', 'error');
+                    }
+                }
+            });
+
         } else {
-            console.error("SpeechRecognition API is not supported in this browser.");
-            statusDiv.textContent = "Sorry, your browser doesn't support Speech Recognition.";
+            console.error("❌ SpeechRecognition API is not supported");
+            updateStatus("Sorry, your browser doesn't support Speech Recognition.", 'error');
             recordButton.disabled = true;
+            buttonText.textContent = 'Not Supported';
         }
 
+        /**
+         * Sends the command to the backend server
+         * @param {string} commandText - The voice command text
+         */
         async function sendCommand(commandText) {
-            console.log("Sending command to server:", commandText);
-            statusDiv.textContent = 'Sending...';
+            console.log("📤 Sending command to server:", commandText);
+            
             try {
                 const response = await fetch('/process-command', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({ command: commandText })
                 });
 
+                console.log(`📥 Server responded with status: ${response.status}`);
+
                 if (!response.ok) {
-                    throw new Error(`Server responded with status: ${response.status}`);
+                    const errorText = await response.text();
+                    throw new Error(`Server error (${response.status}): ${errorText}`);
                 }
 
                 const result = await response.json();
-                console.log("Received response from server:", result);
+                console.log("✅ Server response:", result);
                 
                 if (result.status === 'success') {
-                    statusDiv.textContent = `Success!`;
+                    const data = result.data;
+                    updateStatus(
+                        `✅ Success! Added ${data.qty}kg of ${data.item} to ${data.tab} (Total: $${data.total})`, 
+                        'success'
+                    );
                 } else {
-                    statusDiv.textContent = `Error: ${result.message}`;
+                    updateStatus(`❌ Error: ${result.message}`, 'error');
                 }
+                
             } catch (error) {
-                console.error("Failed to send command:", error);
-                statusDiv.textContent = `Failed to send command. Check console.`;
+                console.error("❌ Failed to send command:", error);
+                
+                let errorMessage;
+                if (error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Cannot reach server. Please check your connection.';
+                } else if (error.message.includes('Server error')) {
+                    errorMessage = error.message;
+                } else {
+                    errorMessage = 'Unexpected error occurred. Please try again.';
+                }
+                
+                updateStatus(`❌ ${errorMessage}`, 'error');
+            } finally {
+                updateButtonState('idle');
+                isProcessing = false;
             }
         }
+
+        // Service worker registration (for offline support)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // Service worker would go here for offline functionality
+                console.log("💡 Service worker support available");
+            });
+        }
+
+        console.log("🎯 Voice Controller initialization complete");
     </script>
 </body>
 </html>
