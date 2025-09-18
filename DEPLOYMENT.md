@@ -102,6 +102,25 @@ The original **411 Length Required** error was caused by:
 - Proper response formatting with appropriate MIME types
 - Detailed logging for debugging
 
+## Deployment Resilience
+
+**New in v1.1:** The application now gracefully handles missing environment variables during deployment.
+
+### Graceful Startup
+- **Production Deployments**: If `GOOGLE_APPS_SCRIPT_URL` is missing, the server starts with warnings instead of crashing
+- **Development**: Still requires proper environment setup for immediate feedback
+- **Smart Detection**: Uses `NODE_ENV=production` or presence of `PORT` environment variable to detect production deployments
+
+### Error Handling
+- API endpoints return helpful 503 errors when Google Sheets integration is not configured
+- Users receive clear feedback about what's missing and what data was processed
+- Health checks and configuration endpoints work regardless of Google Sheets setup
+
+### Deployment Benefits
+- **Zero Downtime**: Server starts immediately, even with incomplete configuration
+- **Easy Debugging**: Clear error messages guide users to proper setup
+- **Backward Compatible**: Existing functionality unchanged when properly configured
+
 ## Production Checklist
 
 - [ ] Google Apps Script deployed and tested
