@@ -13,7 +13,12 @@ const config = {
     port: process.env.PORT || 3000
   },
   auth: {
-    secretKey: process.env.SECRET_KEY || 'pickle prince pepsi'
+    secretKey: process.env.SECRET_KEY || 'pickle prince pepsi',
+    bearerToken: process.env.BEARER_TOKEN || 'your_bearer_token_here',
+    wakePhrase: process.env.WAKE_PHRASE || 'pickle prince pepsi',
+    backupPin: process.env.BACKUP_PIN || '1234',
+    requireWakePhrase: process.env.REQUIRE_WAKE_PHRASE === 'true' || false,
+    enablePinFallback: process.env.ENABLE_PIN_FALLBACK === 'true' || true
   },
   googleAppsScript: {
     url: process.env.GOOGLE_APPS_SCRIPT_URL,
