@@ -38,6 +38,28 @@ function validateAuth(key) {
 }
 
 /**
+ * Validates Bearer token from Authorization header
+ * @param {string} authHeader - The Authorization header value
+ * @returns {boolean} - Whether the token is valid
+ */
+function validateBearerToken(authHeader) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return false;
+  }
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  return token === config.auth.bearerToken;
+}
+
+/**
+ * Validates spoken PIN
+ * @param {string} spokenPin - The spoken PIN from voice command
+ * @returns {boolean} - Whether the PIN is valid
+ */
+function validateSpokenPin(spokenPin) {
+  return spokenPin === config.auth.spokenPin;
+}
+
+/**
  * Parses voice command into structured data
  * @param {string} command - The voice command string
  * @returns {Object} - Parsed command data or error
@@ -47,22 +69,30 @@ function parseVoiceCommand(command) {
     const words = command.toLowerCase().trim().split(/\s+/);
     console.log('Parsed words:', words);
     
-    // Expected format: "pickle prince pepsi [tab] [item] [qty] at [price] [status]"
-    if (words.length < config.voice.minimumWords || 
-        words[0] !== 'pickle' || 
-        words[1] !== 'prince' || 
-        words[2] !== 'pepsi') {
+    // Expected format: "people purple dance keyboard pig [tab] [item] [qty] at [price] [status]"
+    const triggerPhrase = config.voice.triggerPhrase;
+    if (words.length < config.voice.minimumWords) {
       return {
         success: false,
         error: `Bad format - use: ${config.voice.expectedFormat}`
       };
     }
     
-    const tab = words[3];
-    const item = words[4];
-    const qty = parseFloat(words[5]);
-    const price = parseInt(words[7]); // Skip "at" word at index 6
-    const status = words[8];
+    // Check trigger phrase
+    for (let i = 0; i < triggerPhrase.length; i++) {
+      if (words[i] !== triggerPhrase[i]) {
+        return {
+          success: false,
+          error: `Bad format - use: ${config.voice.expectedFormat}`
+        };
+      }
+    }
+    
+    const tab = words[5];  // After trigger phrase
+    const item = words[6];
+    const qty = parseFloat(words[7]);
+    const price = parseInt(words[9]); // Skip "at" word at index 8
+    const status = words[10];
     
     // Validate parsed values
     if (!tab || !item || isNaN(qty) || isNaN(price) || !status) {
@@ -230,6 +260,101 @@ app.post('/voice', async (req, res) => {
   } catch (error) {
     console.error('Error in /voice endpoint:', error);
     res.status(500).send('Sheet down');
+  }
+});
+
+/**
+ * New webhook endpoint with Bearer token authentication and backup PIN support
+ */
+app.post('/webhook/voice', async (req, res) => {
+  try {
+    console.log('Received webhook voice command:', req.body);
+    console.log('Authorization header:', req.headers.authorization);
+    
+    let isAuthenticated = false;
+    let authMethod = '';
+    
+    // Primary authentication: Bearer token
+    if (validateBearerToken(req.headers.authorization)) {
+      isAuthenticated = true;
+      authMethod = 'Bearer token';
+    }
+    // Backup authentication: Spoken PIN in command
+    else if (req.body.command && typeof req.body.command === 'string') {
+      const words = req.body.command.toLowerCase().trim().split(/\s+/);
+      // Check if command starts with PIN (spoken PIN fallback)
+      if (words.length > 0 && validateSpokenPin(words[0])) {
+        isAuthenticated = true;
+        authMethod = 'Spoken PIN';
+        // Remove PIN from command for processing
+        req.body.command = words.slice(1).join(' ');
+      }
+    }
+    
+    if (!isAuthenticated) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Authentication required. Provide Bearer token in Authorization header or spoken PIN in command.',
+        authMethods: ['Bearer token in Authorization header', 'Spoken PIN at start of command']
+      });
+    }
+    
+    console.log(`Authenticated via ${authMethod}`);
+    
+    // Validate command
+    if (!req.body.command || typeof req.body.command !== 'string') {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'No valid command provided' 
+      });
+    }
+    
+    // Parse the voice command
+    const parsedCommand = parseVoiceCommand(req.body.command);
+    
+    if (!parsedCommand.success) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: parsedCommand.error 
+      });
+    }
+    
+    const { tab, item, qty, price, status } = parsedCommand.data;
+    
+    try {
+      // Send data to Google Apps Script
+      const sheetsResponse = await sendToGoogleSheets({
+        tab: tab,
+        item: item,
+        qty: qty,
+        pricePerKg: price,
+        status: status
+      });
+      
+      res.json({ 
+        status: 'success', 
+        message: 'Command processed successfully via webhook',
+        authMethod: authMethod,
+        data: {
+          parsed: parsedCommand.data,
+          sheets_response: sheetsResponse
+        }
+      });
+      
+    } catch (sheetsError) {
+      console.error('Google Sheets error:', sheetsError);
+      res.status(502).json({ 
+        status: 'error', 
+        message: `Failed to update Google Sheets: ${sheetsError.message}` 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Unexpected error in /webhook/voice:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Internal server error' 
+    });
   }
 });
 

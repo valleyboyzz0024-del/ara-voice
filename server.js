@@ -146,28 +146,36 @@ function parseVoiceCommand(command) {
     const words = command.toLowerCase().trim().split(/\s+/);
     console.log('Parsed words:', words);
     
-    // Expected format: "pickle prince pepsi [tab] [item] [qty] at [price] [status]"
-    if (words.length < 8 || 
-        words[0] !== 'pickle' || 
-        words[1] !== 'prince' || 
-        words[2] !== 'pepsi') {
+    // Expected format: "people purple dance keyboard pig [tab] [item] [qty] at [price] [status]"
+    const triggerPhrase = ['people', 'purple', 'dance', 'keyboard', 'pig'];
+    if (words.length < 10) {
       return {
         success: false,
-        error: 'Command must start with "pickle prince pepsi" and have at least 8 words'
+        error: 'Command must have at least 10 words'
       };
+    }
+    
+    // Check trigger phrase
+    for (let i = 0; i < triggerPhrase.length; i++) {
+      if (words[i] !== triggerPhrase[i]) {
+        return {
+          success: false,
+          error: 'Command must start with "people purple dance keyboard pig"'
+        };
+      }
     }
     
     // Find "at" keyword which separates quantity from price
     const atIndex = words.indexOf('at');
-    if (atIndex === -1 || atIndex < 5) {
+    if (atIndex === -1 || atIndex < 7) {
       return {
         success: false,
         error: 'Command must contain "at" keyword to separate quantity from price'
       };
     }
     
-    const tab = words[3];
-    const itemWords = words.slice(4, atIndex - 1);
+    const tab = words[5];  // After trigger phrase
+    const itemWords = words.slice(6, atIndex - 1);
     const qtyWord = words[atIndex - 1];
     const priceWord = words[atIndex + 1];
     const statusWords = words.slice(atIndex + 2);
