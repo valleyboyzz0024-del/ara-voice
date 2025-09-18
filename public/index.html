@@ -23,6 +23,34 @@
         <div class="transcript" id="transcript"></div>
       </div>
       
+      <div class="webhook-test">
+        <h2>🧪 Webhook Test Interface</h2>
+        <div class="test-form">
+          <div class="auth-section">
+            <label for="bearerToken">Bearer Token:</label>
+            <input type="text" id="bearerToken" placeholder="Enter bearer token" value="test-bearer-token">
+          </div>
+          
+          <div class="command-section">
+            <label for="commandInput">Voice Command:</label>
+            <input type="text" id="commandInput" placeholder="Enter voice command" 
+                   value="people purple dance keyboard pig groceries apples 2.5 at 1200 pending">
+            <button id="sendCommand" class="send-button">Send Command</button>
+          </div>
+          
+          <div class="pin-section">
+            <h4>OR Test PIN Authentication:</h4>
+            <input type="text" id="pinInput" placeholder="Enter PIN command" value="pin is 1234">
+            <button id="sendPin" class="send-button">Send PIN</button>
+          </div>
+          
+          <div class="response-section">
+            <h3>Response:</h3>
+            <pre id="responseOutput">Response will appear here...</pre>
+          </div>
+        </div>
+      </div>
+
       <div class="command-guide">
         <h2>Natural Language Commands</h2>
         <div class="command-format">

@@ -21,6 +21,18 @@ Ara Voice is an intelligent voice-to-Google-Sheets application that understands 
 - **createSheet**: Generate new tabs/worksheets
 - **formatCell**: Apply styling and formatting
 
+### 🔐 **Enterprise-Grade Security**
+- **Dual Authentication**: Bearer token + Spoken PIN fallback
+- **Session Management**: 5-minute authentication timeouts
+- **Resilient Network**: Automatic retry with exponential backoff
+- **Production Ready**: Comprehensive error handling and logging
+
+### 🧪 **Web Test Interface**
+- **Interactive Testing**: Built-in webhook test page at root URL
+- **Real-time Results**: JSON response display with syntax highlighting
+- **Authentication Testing**: Test both Bearer token and PIN methods
+- **Developer Friendly**: Perfect for integration testing and debugging
+
 ### 🎯 **Smart Command Examples**
 ```
 "Add 2 kilos of apples to my grocery list"
@@ -71,19 +83,27 @@ The `.env` file is already created with the correct Google Apps Script URL. Upda
 
 ```env
 # Google Apps Script Web App URL
-GOOGLE_APPS_SCRIPT_URL=https://script.google.com/macros/s/AKfycbzN07Imi1MgdHo11qmE2JHcOG-lsJ162CP3DMdiRPdrELmIUbs8ApF6VD3mNQSNI_u-yA/exec
+GOOGLE_APPS_SCRIPT_URL=https://script.google.com/macros/s/YOUR_SCRIPT_ID_HERE/exec
 
 # Port for the Node.js server
 PORT=3000
 
 # Authentication Configuration
-SECRET_KEY=pickle prince pepsi
-BEARER_TOKEN=your-secure-bearer-token-here
-SPOKEN_PIN=1234
+SECRET_KEY=pickle prince pepsi                    # Legacy authentication (deprecated)
+BEARER_TOKEN=your-secure-bearer-token-here       # Primary webhook authentication
+SPOKEN_PIN=1234                                  # PIN for voice authentication fallback
+
+# Request Configuration
+REQUEST_TIMEOUT=10000                            # Timeout for Google Apps Script requests
 
 # OpenAI API Configuration (Optional - uses mock AI if not provided)
 OPENAI_API_KEY=your_openai_api_key_here
 ```
+
+**Important Security Notes:**
+- Replace `BEARER_TOKEN` with a secure, randomly generated token
+- Change `SPOKEN_PIN` to a memorable but secure 4-digit PIN
+- Keep these credentials secure and never commit them to version control
 
 ### 4. Start the Application
 
@@ -189,6 +209,116 @@ Backwards compatible endpoint for structured commands.
 - `GET /health` - Health check
 - `GET /config` - Configuration status
 
+## 🔐 Webhook Authentication
+
+The `/webhook/voice` endpoint supports two authentication methods for maximum flexibility:
+
+### 🎫 Bearer Token Authentication (Recommended)
+
+Perfect for automated systems, IFTTT, Zapier, and API integrations:
+
+```bash
+curl -X POST http://localhost:3000/webhook/voice \
+  -H "Authorization: Bearer your-secure-bearer-token" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "people purple dance keyboard pig groceries milk 2 at 300 pending"}'
+```
+
+### 🗣️ Spoken-PIN Fallback
+
+Ideal for voice assistants when headers aren't easily configurable:
+
+1. **PIN Authentication**: Send PIN command first
+```json
+{
+  "command": "pin is 1234"
+}
+```
+
+2. **Follow-up Command**: Session remains authenticated for 5 minutes
+```json
+{
+  "command": "people purple dance keyboard pig groceries bread 1 at 200 owes"
+}
+```
+
+**Alternative**: Include PIN directly in command
+```json
+{
+  "command": "pin is 1234 people purple dance keyboard pig groceries eggs 12 at 400 pending"
+}
+```
+
+## 🧪 Web Test Page
+
+Access the interactive webhook test interface at `http://localhost:3000`:
+
+### Features:
+- **🎯 Real-time Testing**: Test webhook endpoints instantly
+- **🔐 Authentication Testing**: Try both Bearer token and PIN methods
+- **📊 JSON Response Display**: Beautiful syntax-highlighted responses
+- **🔄 Quick Commands**: Pre-filled example commands for fast testing
+- **🛠️ Developer Tools**: Perfect for debugging and integration
+
+### Usage:
+1. Start the server: `npm start`
+2. Open `http://localhost:3000` in your browser
+3. Test Bearer token authentication or PIN authentication
+4. View real-time JSON responses
+
+## 📱 Voice Assistant Integration
+
+### 🍎 Siri Shortcuts Integration
+
+Create a Siri Shortcut to send voice commands:
+
+1. **Open Shortcuts App** → Create new shortcut
+2. **Add Action** → "Get Contents of URL"
+3. **Configure Request**:
+   - **URL**: `http://your-server.com/webhook/voice`
+   - **Method**: POST
+   - **Headers**: `Authorization: Bearer your-token`
+   - **Request Body**: 
+   ```json
+   {
+     "command": "[Spoken Text from Siri]"
+   }
+   ```
+4. **Add Voice Trigger**: "Add to grocery list"
+5. **Test**: "Hey Siri, add to grocery list" → speak your command
+
+### 🤖 Google Assistant via IFTTT
+
+Set up Google Assistant integration using IFTTT:
+
+1. **Create IFTTT Account** → New Applet
+2. **If This**: Google Assistant
+   - **Trigger**: "Say a phrase with a text ingredient"
+   - **Phrase**: "Add $ to my grocery list"
+3. **Then That**: Webhooks
+   - **URL**: `http://your-server.com/webhook/voice`
+   - **Method**: POST
+   - **Content Type**: `application/json`
+   - **Body**: 
+   ```json
+   {
+     "command": "people purple dance keyboard pig groceries {{TextField}} 1 at 100 pending"
+   }
+   ```
+4. **Headers**: `Authorization|||Bearer your-secure-token`
+5. **Test**: "Hey Google, add apples to my grocery list"
+
+### 🔊 Amazon Alexa Integration
+
+Use Alexa Skills Kit or webhooks service:
+
+1. **Alexa Developer Console** → Create Custom Skill
+2. **Invocation Name**: "grocery manager"
+3. **Intent**: AddItemIntent
+4. **Sample Utterances**: "add {item} to my list"
+5. **Endpoint**: HTTPS webhook to your `/webhook/voice` endpoint
+6. **Test**: "Alexa, tell grocery manager to add bananas to my list"
+
 ## 🎯 Command Examples
 
 ### Adding Items
@@ -277,6 +407,50 @@ curl -X POST \
   -d '{"command":"add 2 kilos of bananas to grocery list"}' \
   http://localhost:3000/voice-command
 ```
+
+### Testing Webhook Authentication
+
+Test Bearer token authentication:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer test-bearer-token" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"people purple dance keyboard pig groceries apples 2.5 at 1200 pending"}' \
+  http://localhost:3000/webhook/voice
+```
+
+Test PIN authentication:
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"command":"pin is 1234"}' \
+  http://localhost:3000/webhook/voice
+```
+
+### Running Jest Test Suite
+
+The application includes a comprehensive test suite with 35 tests covering:
+
+```bash
+# Run all tests
+npm test
+
+# Run tests with coverage
+npm test -- --coverage
+
+# Run specific test file
+npm test auth.test.js
+npm test commands.test.js
+```
+
+**Test Coverage:**
+- ✅ **Authentication Tests**: Bearer token, PIN, and legacy auth validation
+- ✅ **Command Parsing Tests**: Voice command parsing with edge cases
+- ✅ **Webhook Endpoint Tests**: End-to-end authentication and response testing
+- ✅ **Utility Function Tests**: Individual function validation
+- ✅ **Edge Case Testing**: Null, empty, invalid input handling
 
 ## 🐛 Troubleshooting
 

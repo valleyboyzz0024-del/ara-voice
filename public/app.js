@@ -5,6 +5,78 @@ document.addEventListener('DOMContentLoaded', () => {
   const transcript = document.getElementById('transcript');
   const responseContainer = document.getElementById('responseContainer');
   
+  // Webhook test elements
+  const bearerTokenInput = document.getElementById('bearerToken');
+  const commandInput = document.getElementById('commandInput');
+  const pinInput = document.getElementById('pinInput');
+  const sendCommandButton = document.getElementById('sendCommand');
+  const sendPinButton = document.getElementById('sendPin');
+  const responseOutput = document.getElementById('responseOutput');
+  
+  // Webhook test functionality
+  async function sendWebhookCommand(command, token = null) {
+    try {
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch('/webhook/voice', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+          command: command
+        })
+      });
+      
+      const result = await response.json();
+      responseOutput.textContent = JSON.stringify(result, null, 2);
+      
+      if (response.ok) {
+        responseOutput.style.color = '#28a745';
+      } else {
+        responseOutput.style.color = '#dc3545';
+      }
+      
+    } catch (error) {
+      responseOutput.textContent = `Error: ${error.message}`;
+      responseOutput.style.color = '#dc3545';
+    }
+  }
+  
+  // Event listeners for webhook testing
+  if (sendCommandButton) {
+    sendCommandButton.addEventListener('click', () => {
+      const command = commandInput.value.trim();
+      const token = bearerTokenInput.value.trim();
+      
+      if (!command) {
+        responseOutput.textContent = 'Please enter a command';
+        responseOutput.style.color = '#dc3545';
+        return;
+      }
+      
+      sendWebhookCommand(command, token);
+    });
+  }
+  
+  if (sendPinButton) {
+    sendPinButton.addEventListener('click', () => {
+      const pinCommand = pinInput.value.trim();
+      
+      if (!pinCommand) {
+        responseOutput.textContent = 'Please enter a PIN command';
+        responseOutput.style.color = '#dc3545';
+        return;
+      }
+      
+      sendWebhookCommand(pinCommand);
+    });
+  }
+  
   // Speech recognition setup
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {

@@ -2,8 +2,21 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const axios = require('axios');
+const axiosRetry = require('axios-retry').default;
 const OpenAI = require('openai');
 const config = require('./config');
+const { validateAuth, validateBearerToken, validateSpokenPin, parseVoiceCommand, sendToGoogleSheets } = require('./index');
+
+// Configure axios retry for resilient Google Apps Script requests
+axiosRetry(axios, {
+  retries: 3,
+  retryDelay: axiosRetry.exponentialDelay,
+  retryCondition: (error) => {
+    // Retry on network errors or 5xx responses
+    return axiosRetry.isNetworkOrIdempotentRequestError(error) || 
+           (error.response && error.response.status >= 500);
+  }
+});
 
 const app = express();
 
@@ -35,6 +48,124 @@ app.get('/config', (req, res) => {
     port: config.port,
     aiMode: config.useMockAI ? 'Mock AI' : 'OpenAI'
   });
+});
+
+// Session storage for PIN authentication
+const authenticatedSessions = new Map();
+
+// Webhook endpoint with Bearer token authentication and backup PIN support
+app.post('/webhook/voice', async (req, res) => {
+  try {
+    console.log('Received webhook voice command:', req.body);
+    console.log('Authorization header:', req.headers.authorization);
+    
+    let isAuthenticated = false;
+    let authMethod = '';
+    const sessionId = req.headers['x-session-id'] || 'default';
+    
+    // Primary authentication: Bearer token
+    if (validateBearerToken(req.headers.authorization)) {
+      isAuthenticated = true;
+      authMethod = 'Bearer token';
+    }
+    // Backup authentication: Spoken PIN in command
+    else if (req.body.command && typeof req.body.command === 'string') {
+      const words = req.body.command.toLowerCase().trim().split(/\s+/);
+      
+      // Check if command starts with "pin is [PIN]"
+      if (words.length >= 3 && words[0] === 'pin' && words[1] === 'is') {
+        const spokenPin = words[2];
+        if (validateSpokenPin(spokenPin)) {
+          // Mark session as authenticated for next command
+          authenticatedSessions.set(sessionId, Date.now() + 300000); // 5 minutes
+          return res.json({
+            status: 'success',
+            message: 'PIN authenticated. You can now send your voice command.',
+            authMethod: 'Spoken PIN'
+          });
+        } else {
+          return res.status(401).json({
+            status: 'error',
+            message: 'Invalid PIN'
+          });
+        }
+      }
+      
+      // Check if session is already authenticated from previous PIN
+      const sessionAuth = authenticatedSessions.get(sessionId);
+      if (sessionAuth && sessionAuth > Date.now()) {
+        isAuthenticated = true;
+        authMethod = 'Session (PIN authenticated)';
+        // Clean up expired sessions
+        authenticatedSessions.delete(sessionId);
+      }
+    }
+    
+    if (!isAuthenticated) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Authentication required. Provide Bearer token in Authorization header or spoken PIN with "pin is 1234".',
+        authMethods: ['Bearer token in Authorization header', 'Spoken PIN: "pin is [PIN]"']
+      });
+    }
+    
+    console.log(`Authenticated via ${authMethod}`);
+    
+    // Validate command
+    if (!req.body.command || typeof req.body.command !== 'string') {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'No valid command provided' 
+      });
+    }
+    
+    // Parse the voice command
+    const parsedCommand = parseVoiceCommand(req.body.command);
+    
+    if (!parsedCommand.success) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: parsedCommand.error 
+      });
+    }
+    
+    const { tab, item, qty, price, status } = parsedCommand.data;
+    
+    try {
+      // Send data to Google Apps Script
+      const sheetsResponse = await sendToGoogleSheets({
+        tab: tab,
+        item: item,
+        qty: qty,
+        price: price,
+        status: status
+      });
+      
+      res.json({ 
+        status: 'success', 
+        message: 'Command processed successfully via webhook',
+        authMethod: authMethod,
+        data: {
+          parsed: parsedCommand.data,
+          sheets_response: sheetsResponse
+        }
+      });
+      
+    } catch (sheetsError) {
+      console.error('Google Sheets error:', sheetsError);
+      res.status(502).json({ 
+        status: 'error', 
+        message: `Failed to update Google Sheets: ${sheetsError.message}` 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Unexpected error in /webhook/voice:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Internal server error' 
+    });
+  }
 });
 
 // New voice command endpoint with conversational AI
@@ -139,83 +270,7 @@ app.post('/voice-command', async (req, res) => {
   }
 });
 
-// Helper function to parse voice commands
-function parseVoiceCommand(command) {
-  // This is now deprecated - kept for backwards compatibility
-  try {
-    const words = command.toLowerCase().trim().split(/\s+/);
-    console.log('Parsed words:', words);
-    
-    // Expected format: "people purple dance keyboard pig [tab] [item] [qty] at [price] [status]"
-    const triggerPhrase = ['people', 'purple', 'dance', 'keyboard', 'pig'];
-    if (words.length < 10) {
-      return {
-        success: false,
-        error: 'Command must have at least 10 words'
-      };
-    }
-    
-    // Check trigger phrase
-    for (let i = 0; i < triggerPhrase.length; i++) {
-      if (words[i] !== triggerPhrase[i]) {
-        return {
-          success: false,
-          error: 'Command must start with "people purple dance keyboard pig"'
-        };
-      }
-    }
-    
-    // Find "at" keyword which separates quantity from price
-    const atIndex = words.indexOf('at');
-    if (atIndex === -1 || atIndex < 7) {
-      return {
-        success: false,
-        error: 'Command must contain "at" keyword to separate quantity from price'
-      };
-    }
-    
-    const tab = words[5];  // After trigger phrase
-    const itemWords = words.slice(6, atIndex - 1);
-    const qtyWord = words[atIndex - 1];
-    const priceWord = words[atIndex + 1];
-    const statusWords = words.slice(atIndex + 2);
-    
-    // Validate and parse quantity and price
-    const qty = parseFloat(qtyWord);
-    const price = parseFloat(priceWord);
-    
-    if (isNaN(qty) || qty <= 0) {
-      return {
-        success: false,
-        error: `Invalid quantity: "${qtyWord}". Must be a positive number.`
-      };
-    }
-    
-    if (isNaN(price) || price <= 0) {
-      return {
-        success: false,
-        error: `Invalid price: "${priceWord}". Must be a positive number.`
-      };
-    }
-    
-    return {
-      success: true,
-      data: {
-        tab: tab,
-        item: itemWords.join(' '),
-        qty: qty,
-        price: price,
-        status: statusWords.join(' ')
-      }
-    };
-    
-  } catch (error) {
-    return {
-      success: false,
-      error: `Failed to parse command: ${error.message}`
-    };
-  }
-}
+// Helper function to parse voice commands is now imported from index.js
 
 /**
  * Process natural language command using AI
