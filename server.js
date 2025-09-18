@@ -69,6 +69,15 @@ app.post('/webhook/voice', async (req, res) => {
       if (validateSecretPhrase(req.body.command.trim())) {
         isAuthenticated = true;
         authMethod = 'Secret phrase';
+        
+        // If command is exactly the secret phrase, return success without processing
+        if (req.body.command.trim().toLowerCase() === config.auth.secretPhrase.toLowerCase()) {
+          return res.json({
+            status: 'success',
+            message: 'Secret phrase authenticated. You can now send your voice command.',
+            authMethod: 'Secret phrase'
+          });
+        }
       }
     }
     

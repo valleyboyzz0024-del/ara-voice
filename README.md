@@ -89,9 +89,10 @@ GOOGLE_APPS_SCRIPT_URL=https://script.google.com/macros/s/YOUR_SCRIPT_ID_HERE/ex
 PORT=3000
 
 # Authentication Configuration
-SECRET_KEY=pickle prince pepsi                    # Legacy authentication (deprecated)
-BEARER_TOKEN=your-secure-bearer-token-here       # Primary webhook authentication
-SPOKEN_PIN=1234                                  # PIN for voice authentication fallback
+SECRET_PHRASE=purple people dance keyboard pig      # Primary authentication method
+SECRET_KEY=pickle prince pepsi                      # Legacy authentication (deprecated)
+BEARER_TOKEN=your-secure-bearer-token-here         # Secondary webhook authentication  
+SPOKEN_PIN=1279572380                               # PIN for voice authentication fallback
 
 # Request Configuration
 REQUEST_TIMEOUT=10000                            # Timeout for Google Apps Script requests
@@ -101,8 +102,9 @@ OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 **Important Security Notes:**
+- Replace `SECRET_PHRASE` with your own secure phrase for primary authentication
 - Replace `BEARER_TOKEN` with a secure, randomly generated token
-- Change `SPOKEN_PIN` to a memorable but secure 4-digit PIN
+- Change `SPOKEN_PIN` to a memorable but secure numeric PIN
 - Keep these credentials secure and never commit them to version control
 
 ### 4. Start the Application
@@ -211,9 +213,28 @@ Backwards compatible endpoint for structured commands.
 
 ## 🔐 Webhook Authentication
 
-The `/webhook/voice` endpoint supports two authentication methods for maximum flexibility:
+The `/webhook/voice` endpoint supports three authentication methods with the following priority order:
 
-### 🎫 Bearer Token Authentication (Recommended)
+### 🔑 Secret Phrase Authentication (Primary)
+
+The most secure and convenient method. Simply include the secret phrase as your command:
+
+```bash
+curl -X POST http://localhost:3000/webhook/voice \
+  -H "Content-Type: application/json" \
+  -d '{"command": "purple people dance keyboard pig"}'
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Command would be processed",
+  "authMethod": "Secret phrase"
+}
+```
+
+### 🎫 Bearer Token Authentication (Secondary)
 
 Perfect for automated systems, IFTTT, Zapier, and API integrations:
 
@@ -226,12 +247,12 @@ curl -X POST http://localhost:3000/webhook/voice \
 
 ### 🗣️ Spoken-PIN Fallback
 
-Ideal for voice assistants when headers aren't easily configurable:
+Ideal for voice assistants when other methods aren't easily configurable:
 
 1. **PIN Authentication**: Send PIN command first
 ```json
 {
-  "command": "pin is 1234"
+  "command": "pin is 1279572380"
 }
 ```
 
@@ -245,7 +266,7 @@ Ideal for voice assistants when headers aren't easily configurable:
 **Alternative**: Include PIN directly in command
 ```json
 {
-  "command": "pin is 1234 people purple dance keyboard pig groceries eggs 12 at 400 pending"
+  "command": "pin is 1279572380 people purple dance keyboard pig groceries eggs 12 at 400 pending"
 }
 ```
 
@@ -255,7 +276,7 @@ Access the interactive webhook test interface at `http://localhost:3000`:
 
 ### Features:
 - **🎯 Real-time Testing**: Test webhook endpoints instantly
-- **🔐 Authentication Testing**: Try both Bearer token and PIN methods
+- **🔐 Authentication Testing**: Try secret phrase, Bearer token, and PIN methods
 - **📊 JSON Response Display**: Beautiful syntax-highlighted responses
 - **🔄 Quick Commands**: Pre-filled example commands for fast testing
 - **🛠️ Developer Tools**: Perfect for debugging and integration
@@ -263,7 +284,7 @@ Access the interactive webhook test interface at `http://localhost:3000`:
 ### Usage:
 1. Start the server: `npm start`
 2. Open `http://localhost:3000` in your browser
-3. Test Bearer token authentication or PIN authentication
+3. Test secret phrase, Bearer token, or PIN authentication
 4. View real-time JSON responses
 
 ## 📱 Voice Assistant Integration
@@ -380,9 +401,10 @@ Set these environment variables in your deployment platform:
 - `GOOGLE_APPS_SCRIPT_URL`: Your deployed Google Apps Script Web App URL
 - `PORT`: Server port (usually set automatically by hosting platforms)
 - `OPENAI_API_KEY`: Optional - OpenAI API key for enhanced AI processing
+- `SECRET_PHRASE`: Primary authentication phrase (default: "purple people dance keyboard pig")
 - `SECRET_KEY`: Legacy authentication key (default: "pickle prince pepsi")
 - `BEARER_TOKEN`: Secure token for webhook authentication
-- `SPOKEN_PIN`: Numeric PIN for voice authentication fallback (default: "1234")
+- `SPOKEN_PIN`: Numeric PIN for voice authentication fallback (default: "1279572380")
 
 ## 🧪 Testing
 
@@ -425,7 +447,7 @@ Test PIN authentication:
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -d '{"command":"pin is 1234"}' \
+  -d '{"command":"pin is 1279572380"}' \
   http://localhost:3000/webhook/voice
 ```
 
