@@ -92,6 +92,11 @@ function parseVoiceCommand(command) {
  * @returns {Promise} - Fetch promise
  */
 async function sendToGoogleSheets(data) {
+  // Check if Google Apps Script URL is configured
+  if (!config.googleAppsScript.url) {
+    throw new Error('Google Sheets integration not configured. Please set GOOGLE_APPS_SCRIPT_URL environment variable.');
+  }
+  
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), config.googleAppsScript.timeout);
   

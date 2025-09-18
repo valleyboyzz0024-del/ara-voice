@@ -28,7 +28,18 @@ const config = {
 // Validate required configuration
 if (!config.googleAppsScriptUrl) {
   console.error('ERROR: GOOGLE_APPS_SCRIPT_URL environment variable is required');
-  process.exit(1);
+  console.error('The application will start but Google Sheets integration will not work.');
+  console.error('Please set GOOGLE_APPS_SCRIPT_URL in your deployment environment variables.');
+  
+  // In production deployments, don't exit - allow the server to start for debugging
+  if (process.env.NODE_ENV === 'production' || process.env.PORT) {
+    console.warn('WARNING: Starting server without Google Apps Script URL - limited functionality');
+    config.googleAppsScriptUrl = null;
+    config.googleAppsScript.url = null;
+  } else {
+    // Only exit in development when .env should be available
+    process.exit(1);
+  }
 }
 
 // OpenAI is optional - will use mock if not provided

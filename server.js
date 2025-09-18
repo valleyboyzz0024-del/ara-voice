@@ -65,6 +65,16 @@ app.post('/voice-command', async (req, res) => {
     const commandData = aiResult.data;
     console.log('AI processed command:', commandData);
     
+    // Check if Google Apps Script URL is configured
+    if (!config.googleAppsScriptUrl) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Google Sheets integration not configured. Please set GOOGLE_APPS_SCRIPT_URL environment variable.',
+        data: commandData,
+        note: 'Command processed successfully but could not be sent to Google Sheets'
+      });
+    }
+    
     // Create abort controller for timeout handling
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), config.requestTimeout);
@@ -391,6 +401,16 @@ app.post('/process-command', async (req, res) => {
     const { tab, item, qty, price, status } = parseResult.data;
     console.log(`Processing: ${tab} | ${item} | ${qty}kg | $${price}/kg | ${status}`);
     
+    // Check if Google Apps Script URL is configured
+    if (!config.googleAppsScriptUrl) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Google Sheets integration not configured. Please set GOOGLE_APPS_SCRIPT_URL environment variable.',
+        parsedCommand: { tab, item, qty, price, status },
+        note: 'Command processed successfully but could not be sent to Google Sheets'
+      });
+    }
+    
     // Create abort controller for timeout handling
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), config.requestTimeout);
@@ -465,6 +485,16 @@ app.post('/api/voice-data', async (req, res) => {
         success: false, 
         error: 'Missing required fields',
         message: 'Please provide tabName, item, qty, pricePerKg, and status'
+      });
+    }
+    
+    // Check if Google Apps Script URL is configured
+    if (!config.googleAppsScriptUrl) {
+      return res.status(503).json({
+        success: false,
+        error: 'Google Sheets integration not configured. Please set GOOGLE_APPS_SCRIPT_URL environment variable.',
+        receivedData: req.body,
+        message: 'Data received successfully but could not be sent to Google Sheets'
       });
     }
     
