@@ -38,6 +38,42 @@ function validateAuth(key) {
 }
 
 /**
+ * Validates Bearer token from Authorization header
+ * @param {string} authHeader - The Authorization header value
+ * @returns {boolean} - Whether the bearer token is valid
+ */
+function validateBearerToken(authHeader) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return false;
+  }
+  
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  return token === config.auth.bearerToken;
+}
+
+/**
+ * Middleware to authenticate Bearer token
+ */
+function authenticateBearer(req, res, next) {
+  if (!config.auth.bearerToken) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Bearer token authentication not configured'
+    });
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!validateBearerToken(authHeader)) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Invalid or missing Bearer token'
+    });
+  }
+
+  next();
+}
+
+/**
  * Parses voice command into structured data
  * @param {string} command - The voice command string
  * @returns {Object} - Parsed command data or error
@@ -223,13 +259,107 @@ app.post('/voice', async (req, res) => {
       return res.status(403).send('Wrong key');
     }
     
-    // Forward to the main endpoint
-    req.body.command = req.body.transcript;
-    return app._router.handle({ ...req, path: '/process-command', method: 'POST' }, res);
+    // Use transcript or command
+    const command = req.body.transcript || req.body.command;
+    
+    if (!command || typeof command !== 'string') {
+      return res.status(400).send('No valid command provided');
+    }
+    
+    // Parse the voice command
+    const parseResult = parseVoiceCommand(command);
+    if (!parseResult.success) {
+      return res.status(400).send(parseResult.error);
+    }
+    
+    // Send to Google Apps Script
+    try {
+      const result = await sendToGoogleSheets(parseResult.data);
+      res.send('Successfully processed');
+    } catch (sheetsError) {
+      console.error('Google Sheets error in /voice:', sheetsError.message);
+      res.status(500).send('Sheet down');
+    }
     
   } catch (error) {
     console.error('Error in /voice endpoint:', error);
     res.status(500).send('Sheet down');
+  }
+});
+
+/**
+ * Webhook endpoint with Bearer token authentication
+ */
+app.post('/webhook/voice', authenticateBearer, async (req, res) => {
+  try {
+    console.log('Received webhook voice command:', req.body);
+    
+    // Validate request body
+    if (!req.body.command && !req.body.transcript) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'No valid command or transcript provided' 
+      });
+    }
+
+    // Use command or transcript (for backward compatibility)
+    const command = req.body.command || req.body.transcript;
+    
+    if (!command || typeof command !== 'string') {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'No valid command provided' 
+      });
+    }
+    
+    // Parse the voice command
+    const parseResult = parseVoiceCommand(command);
+    if (!parseResult.success) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: parseResult.error 
+      });
+    }
+    
+    const { tab, item, qty, price, status } = parseResult.data;
+    console.log(`Processing webhook: ${tab} | ${item} | ${qty}kg | $${price}/kg | ${status}`);
+    
+    // Send to Google Apps Script
+    try {
+      const result = await sendToGoogleSheets(parseResult.data);
+      console.log('Successfully sent webhook data to Google Sheets');
+      
+      res.json({ 
+        status: 'success', 
+        message: 'Webhook command processed successfully',
+        data: {
+          original_command: command,
+          processed_data: {
+            tab,
+            item,
+            qty,
+            pricePerKg: price,
+            status,
+            total: qty * price
+          },
+          sheets_response: result
+        }
+      });
+      
+    } catch (sheetsError) {
+      console.error('Google Sheets error in webhook:', sheetsError.message);
+      res.status(502).json({ 
+        status: 'error', 
+        message: `Failed to update Google Sheets: ${sheetsError.message}` 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Unexpected error in /webhook/voice:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
   }
 });
 
