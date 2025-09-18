@@ -46,6 +46,14 @@ function validateSpokenPin(spokenPin) {
  */
 function parseVoiceCommand(command) {
   try {
+    // Handle null/undefined input
+    if (!command || typeof command !== 'string') {
+      return {
+        success: false,
+        error: 'Invalid command input'
+      };
+    }
+    
     const words = command.toLowerCase().trim().split(/\s+/);
     console.log('Parsed words:', words);
     
@@ -75,10 +83,10 @@ function parseVoiceCommand(command) {
     const status = words[10];
     
     // Validate parsed values
-    if (!tab || !item || isNaN(qty) || isNaN(price) || !status) {
+    if (!tab || !item || isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0 || !status) {
       return {
         success: false,
-        error: 'Invalid values - check tab, item, quantity, and price'
+        error: 'Invalid values - check tab, item, quantity (must be > 0), and price (must be > 0)'
       };
     }
     

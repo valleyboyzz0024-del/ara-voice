@@ -302,3 +302,95 @@ footer {
     font-size: 2rem;
   }
 }
+
+/* Webhook Test Interface Styles */
+.webhook-test {
+  background: white;
+  padding: 2rem;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+}
+
+.webhook-test h2 {
+  color: var(--primary);
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+}
+
+.test-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.auth-section, .command-section, .pin-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pin-section h4 {
+  color: var(--secondary);
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.test-form label {
+  font-weight: 600;
+  color: var(--dark);
+}
+
+.test-form input {
+  padding: 0.8rem;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+}
+
+.test-form input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.send-button {
+  padding: 0.8rem 1.5rem;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 0.5rem;
+}
+
+.send-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(58, 134, 255, 0.3);
+}
+
+.response-section {
+  border-top: 2px solid #e9ecef;
+  padding-top: 1.5rem;
+}
+
+.response-section h3 {
+  color: var(--dark);
+  margin-bottom: 1rem;
+}
+
+#responseOutput {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.9rem;
+  color: var(--dark);
+  border: 1px solid #e9ecef;
+  min-height: 100px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
