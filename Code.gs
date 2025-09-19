@@ -59,6 +59,9 @@ function doPost(e) {
       case 'readSheet':
         result = readSheetContents(data);
         break;
+      case 'readAllSheets':
+        result = readAllSheetsContents(data);
+        break;
       case 'createSheet':
         result = createNewSheet(data);
         break;
@@ -446,6 +449,67 @@ function readSheetContents(data) {
     return {
       success: false,
       error: `Failed to read sheet: ${error.message}`
+    };
+  }
+}
+
+/**
+ * Read ALL sheet contents from ALL tabs for full-sheet awareness
+ * @param {Object} data - Optional parameters (currently unused)
+ * @returns {Object} - Success/failure result with all sheet data
+ */
+function readAllSheetsContents(data) {
+  try {
+    const { spreadsheet, sheet, success, error } = getOrCreateSpreadsheet();
+    if (!success) return { success: false, error };
+    
+    const allSheets = spreadsheet.getSheets();
+    const allSheetsData = {};
+    let totalRows = 0;
+    
+    allSheets.forEach(sheet => {
+      const sheetName = sheet.getName();
+      const lastRow = sheet.getLastRow();
+      
+      if (lastRow < 2) {
+        // Empty sheet
+        allSheetsData[sheetName] = {
+          headers: ['Timestamp', 'Item', 'Quantity', 'Price/kg', 'Status'],
+          rows: [],
+          rowCount: 0
+        };
+      } else {
+        // Get headers and data
+        const headers = sheet.getRange(1, 1, 1, 5).getValues()[0];
+        const allData = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+        
+        allSheetsData[sheetName] = {
+          headers: headers,
+          rows: allData,
+          rowCount: allData.length
+        };
+        
+        totalRows += allData.length;
+      }
+    });
+    
+    console.log('Read all sheets data - Total sheets:', allSheets.length, 'Total rows:', totalRows);
+    
+    return {
+      success: true,
+      message: `Retrieved data from ${allSheets.length} sheets with ${totalRows} total rows`,
+      data: {
+        sheets: allSheetsData,
+        totalSheets: allSheets.length,
+        totalRows: totalRows
+      }
+    };
+    
+  } catch (error) {
+    console.error('Error reading all sheets:', error);
+    return {
+      success: false,
+      error: `Failed to read all sheets: ${error.message}`
     };
   }
 }

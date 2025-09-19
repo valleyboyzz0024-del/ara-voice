@@ -196,7 +196,7 @@ app.post('/voice-command', async (req, res) => {
     
     const sessionId = req.body.sessionId || 'default';
     
-    // Process command with AI
+    // Process command with AI (Read, Think, Act architecture)
     const aiResult = await processAICommand(req.body.command, sessionId);
     
     if (!aiResult.success) {
@@ -210,70 +210,99 @@ app.post('/voice-command', async (req, res) => {
     const commandData = aiResult.data;
     console.log('AI processed command:', commandData);
     
-    // Create abort controller for timeout handling
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), config.requestTimeout);
-    
-    try {
-      // Send data to Google Apps Script based on action type (skip if in test mode)
-      let response;
-      if (config.googleAppsScriptUrl.includes('test-mode') || config.googleAppsScriptUrl.includes('localhost')) {
-        // Mock response for testing
-        response = {
-          data: {
-            status: 'success',
-            message: `Mock: ${commandData.action} operation completed successfully`,
-            data: commandData
-          }
-        };
-      } else {
-        response = await axios.post(
-          config.googleAppsScriptUrl,
-          {
-            action: commandData.action,
-            ...commandData
-          },
-          { 
-            signal: controller.signal,
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            timeout: config.requestTimeout
-          }
-        );
-      }
-      
-      clearTimeout(timeoutId);
-      
-      console.log('Google Apps Script response:', response.data);
-      
-      res.status(200).json({
+    // Handle Q&A responses (no Google Sheets interaction needed)
+    if (aiResult.isAnswer) {
+      return res.status(200).json({
         status: 'success',
-        message: 'Command processed successfully',
+        message: 'Question answered successfully',
+        type: 'answer',
         data: {
           original_command: req.body.command,
-          interpreted_action: commandData,
-          sheets_response: response.data
+          answer: commandData.response,
+          action_type: 'answer'
         }
       });
-      
-    } catch (axiosError) {
-      clearTimeout(timeoutId);
-      console.error('Error calling Google Apps Script:', axiosError.message);
-      
-      let errorMessage = 'Failed to update Google Sheets';
-      if (axiosError.code === 'ECONNABORTED') {
-        errorMessage = 'Request to Google Sheets timed out';
-      } else if (axiosError.response) {
-        errorMessage = `Google Sheets error: ${axiosError.response.status}`;
-      }
-      
-      res.status(500).json({
-        status: 'error',
-        message: errorMessage,
-        details: axiosError.message
-      });
     }
+    
+    // Handle data modification actions (addRow, deleteRow, etc.)
+    if (aiResult.isAddRow || commandData.action !== 'answer') {
+      // Create abort controller for timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), config.requestTimeout);
+      
+      try {
+        // Send data to Google Apps Script based on action type
+        let response;
+        if (config.googleAppsScriptUrl.includes('test-mode') || config.googleAppsScriptUrl.includes('localhost')) {
+          // Mock response for testing
+          response = {
+            data: {
+              status: 'success',
+              message: `Mock: ${commandData.action} operation completed successfully`,
+              data: commandData
+            }
+          };
+        } else {
+          response = await axios.post(
+            config.googleAppsScriptUrl,
+            {
+              action: commandData.action,
+              ...commandData
+            },
+            { 
+              signal: controller.signal,
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              timeout: config.requestTimeout
+            }
+          );
+        }
+        
+        clearTimeout(timeoutId);
+        
+        console.log('Google Apps Script response:', response.data);
+        
+        return res.status(200).json({
+          status: 'success',
+          message: 'Command processed successfully',
+          type: 'action',
+          data: {
+            original_command: req.body.command,
+            interpreted_action: commandData,
+            sheets_response: response.data
+          }
+        });
+        
+      } catch (axiosError) {
+        clearTimeout(timeoutId);
+        console.error('Error calling Google Apps Script:', axiosError.message);
+        
+        let errorMessage = 'Failed to update Google Sheets';
+        if (axiosError.code === 'ECONNABORTED') {
+          errorMessage = 'Request to Google Sheets timed out';
+        } else if (axiosError.response) {
+          errorMessage = `Google Sheets error: ${axiosError.response.status}`;
+        }
+        
+        return res.status(500).json({
+          status: 'error',
+          message: errorMessage,
+          details: axiosError.message
+        });
+      }
+    }
+    
+    // Fallback for unknown response types
+    return res.status(200).json({
+      status: 'success',
+      message: 'Command processed',
+      type: 'unknown',
+      data: {
+        original_command: req.body.command,
+        interpreted_action: commandData
+      }
+    });
     
   } catch (error) {
     console.error('Unexpected error in /voice-command:', error);
@@ -295,21 +324,92 @@ async function processAICommand(naturalCommand, sessionId) {
 
   const context = conversationContexts.get(sessionId) || [];
   
-  const systemPrompt = `You are an intelligent assistant for a voice-controlled Google Sheets app. Your task is to interpret natural language commands and convert them into a JSON object representing the action. The user is speaking to you.
-
-  Supported actions: addRow, deleteRow, readSheet, createSheet.
-
-  For addRow actions, respond with JSON like:
-  {
-    "action": "addRow",
-    "tabName": "groceries",
-    "item": "apples",
-    "qty": 2.5,
-    "pricePerKg": 1200,
-    "status": "owes"
+  // STEP 1: READ - Get all sheet data for full-sheet awareness
+  console.log('Reading all sheet data for full-sheet awareness...');
+  let allSheetsData = null;
+  
+  try {
+    // Read all sheets data from Google Apps Script
+    if (config.googleAppsScriptUrl.includes('test-mode') || config.googleAppsScriptUrl.includes('localhost')) {
+      // Mock data for testing
+      allSheetsData = {
+        sheets: {
+          'groceries': {
+            headers: ['Timestamp', 'Item', 'Quantity', 'Price/kg', 'Status'],
+            rows: [
+              ['2024-01-01 10:00', 'apples', 2.5, 1200, 'owes'],
+              ['2024-01-01 11:00', 'bananas', 1.0, 800, 'paid']
+            ],
+            rowCount: 2
+          },
+          'expenses': {
+            headers: ['Timestamp', 'Item', 'Quantity', 'Price/kg', 'Status'],
+            rows: [
+              ['2024-01-01 12:00', 'coffee', 0.5, 2000, 'owes']
+            ],
+            rowCount: 1
+          }
+        },
+        totalSheets: 2,
+        totalRows: 3
+      };
+    } else {
+      const response = await axios.post(
+        config.googleAppsScriptUrl,
+        { action: 'readAllSheets' },
+        { 
+          headers: { 'Content-Type': 'application/json' },
+          timeout: config.requestTimeout
+        }
+      );
+      
+      if (response.data.status === 'success') {
+        allSheetsData = response.data.data;
+      } else {
+        console.error('Failed to read all sheets:', response.data.message);
+        allSheetsData = { sheets: {}, totalSheets: 0, totalRows: 0 };
+      }
+    }
+  } catch (error) {
+    console.error('Error reading all sheets data:', error.message);
+    allSheetsData = { sheets: {}, totalSheets: 0, totalRows: 0 };
   }
 
-  For other actions, infer the appropriate parameters. Be intelligent about missing information - use reasonable defaults or ask for clarification.`;
+  // STEP 2: THINK - New system prompt for conversational data assistant
+  const systemPrompt = `You are a conversational data assistant for a voice-controlled Google Sheets application. You have FULL AWARENESS of all the user's sheet data and can both answer questions about the data AND add new entries.
+
+CURRENT SHEET DATA:
+${JSON.stringify(allSheetsData, null, 2)}
+
+Your capabilities:
+1. **ANSWER QUESTIONS** about the data (e.g., "How much does Hulk owe in total?", "What items do I have in groceries?", "Show me all pending items")
+2. **ADD NEW DATA** when the user wants to add items to sheets
+
+For QUESTIONS about data, respond with:
+{
+  "action": "answer",
+  "response": "Your detailed answer based on the sheet data above"
+}
+
+For ADDING DATA, respond with:
+{
+  "action": "addRow", 
+  "tabName": "sheet_name",
+  "item": "item_name",
+  "qty": number,
+  "pricePerKg": number,
+  "status": "owes|paid|pending"
+}
+
+IMPORTANT ANALYSIS RULES:
+- When calculating totals, multiply quantity by price per kg for each row
+- Status "owes" means money is owed, "paid" means paid, "pending" means not yet determined
+- Be conversational and helpful in your answers
+- If asking about a person like "Hulk", search for that name in the Item column
+- Always base your answers on the ACTUAL DATA provided above
+- For ambiguous commands, ask for clarification
+
+The user is speaking to you naturally. Determine if they're asking a question or wanting to add data.`;
 
   context.push({ role: 'user', content: naturalCommand });
 
@@ -321,13 +421,13 @@ async function processAICommand(naturalCommand, sessionId) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'grok-4-latest', // Using the correct model name from your test
+        model: 'grok-4-latest',
         messages: [
           { role: 'system', content: systemPrompt },
           ...context.slice(-10)
         ],
         temperature: 0.1,
-        max_tokens: 500,
+        max_tokens: 1000,
         stream: false
       }),
     });
@@ -345,7 +445,25 @@ async function processAICommand(naturalCommand, sessionId) {
 
     try {
       const parsed = JSON.parse(reply);
-      return { success: true, data: parsed };
+      
+      // STEP 3: ACT - Handle both answer and addRow actions
+      if (parsed.action === 'answer') {
+        return { 
+          success: true, 
+          data: parsed,
+          isAnswer: true  // Flag to indicate this is a Q&A response
+        };
+      } else if (parsed.action === 'addRow') {
+        return { 
+          success: true, 
+          data: parsed,
+          isAddRow: true  // Flag to indicate this needs to add data
+        };
+      } else {
+        // Support other existing actions
+        return { success: true, data: parsed };
+      }
+      
     } catch (parseError) {
       return {
         success: false,
@@ -365,14 +483,58 @@ async function processAICommand(naturalCommand, sessionId) {
 }
 
 /**
- * Mock AI processing for when OpenAI API key is not available
+ * Mock AI processing for when Grok API key is not available
  */
 function mockAIProcessing(naturalCommand, sessionId) {
   console.log('Using mock AI processing for:', naturalCommand);
   
   const command = naturalCommand.toLowerCase();
   
-  // Simple pattern matching for demo
+  // Mock Q&A responses for questions about data
+  if (command.includes('how much') || command.includes('total') || command.includes('owe')) {
+    if (command.includes('hulk')) {
+      return {
+        success: true,
+        data: {
+          action: 'answer',
+          response: 'Based on the mock data, Hulk owes $3,000 total (2.5kg of apples at $1,200/kg).'
+        },
+        isAnswer: true
+      };
+    }
+    return {
+      success: true,
+      data: {
+        action: 'answer', 
+        response: 'Based on the current data, the total amount owed is $3,400 across all items.'
+      },
+      isAnswer: true
+    };
+  }
+  
+  if (command.includes('what') && (command.includes('item') || command.includes('have') || command.includes('list'))) {
+    return {
+      success: true,
+      data: {
+        action: 'answer',
+        response: 'You currently have: apples (2.5kg, owes), bananas (1.0kg, paid), and coffee (0.5kg, owes) in your sheets.'
+      },
+      isAnswer: true
+    };
+  }
+  
+  if (command.includes('show') && (command.includes('pending') || command.includes('owe'))) {
+    return {
+      success: true,
+      data: {
+        action: 'answer', 
+        response: 'Items with pending/owed status: apples (2.5kg, $3,000 owed) and coffee (0.5kg, $1,000 owed).'
+      },
+      isAnswer: true
+    };
+  }
+  
+  // Simple pattern matching for adding data
   if (command.includes('add') && (command.includes('to') || command.includes('list'))) {
     // Extract quantity using regex
     const qtyMatch = command.match(/(\d+(?:\.\d+)?)\s*(?:kilo|kg|k|kilos)/);
@@ -408,7 +570,8 @@ function mockAIProcessing(naturalCommand, sessionId) {
         qty: qty,
         pricePerKg: 1000, // default price
         status: 'pending'
-      }
+      },
+      isAddRow: true
     };
   }
   
@@ -423,7 +586,7 @@ function mockAIProcessing(naturalCommand, sessionId) {
     };
   }
   
-  if (command.includes('what') || command.includes('show') || command.includes('list')) {
+  if (command.includes('show') || command.includes('read')) {
     return {
       success: true,
       data: {
@@ -446,10 +609,22 @@ function mockAIProcessing(naturalCommand, sessionId) {
     };
   }
   
+  // Default Q&A response for unrecognized questions
+  if (command.includes('?') || command.includes('how') || command.includes('what') || command.includes('show')) {
+    return {
+      success: true,
+      data: {
+        action: 'answer',
+        response: 'I can help you with questions about your data or adding new items. Try asking "How much do I owe?" or "Add 2 kilos of bananas to groceries".'
+      },
+      isAnswer: true
+    };
+  }
+  
   // Default response for unrecognized commands
   return {
     success: false,
-    error: "I couldn't understand that command. Try commands like 'add 2 kilos of apples to grocery list' or 'show my shopping list'",
+    error: "I couldn't understand that command. Try asking questions about your data like 'How much do I owe?' or adding items like 'Add 2 kilos of apples to grocery list'",
     needsClarification: true
   };
 }

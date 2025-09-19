@@ -6,11 +6,14 @@ Ara Voice is an intelligent voice-to-Google-Sheets application that understands 
 
 ## 🚀 Features
 
-### 🧠 **Conversational AI Brain**
+### 🧠 **Conversational Data Assistant**
+- **Full-Sheet Awareness**: Reads and understands ALL your Google Sheet data across ALL tabs
+- **Q&A Capabilities**: Answer questions about your data - "How much does John owe in total?"
+- **Read-Think-Act Architecture**: Reads all data first, analyzes with AI, then acts accordingly
 - **Natural Language Processing**: Speak normally - "add 5 kilos of bananas to my grocery list"
 - **Context Awareness**: Remembers conversation history for follow-up commands
 - **Intelligent Interpretation**: Infers missing details and provides reasonable defaults
-- **Multi-Action Support**: Handles complex operations beyond simple data entry
+- **Dual Mode Operation**: Both question answering AND data modification in one interface
 
 ### 📊 **Google Sheets God Mode**
 - **addRow**: Add items with smart defaults
@@ -35,6 +38,13 @@ Ara Voice is an intelligent voice-to-Google-Sheets application that understands 
 
 ### 🎯 **Smart Command Examples**
 ```
+// Data Questions (New!)
+"How much does Hulk owe in total?"
+"What items do I have in my grocery list?"
+"Show me all pending items"
+"Which items are marked as paid?"
+
+// Data Commands
 "Add 2 kilos of apples to my grocery list"
 "Delete the last item I added"
 "Show me my shopping list" 
@@ -162,22 +172,43 @@ Content-Type: application/json
 }
 ```
 
-### 🆕 `POST /voice-command` (Conversational AI)
-Main endpoint for natural language voice commands.
+### 🆕 `POST /voice-command` (Conversational Data Assistant)
+Main endpoint for natural language voice commands with full-sheet awareness and Q&A capabilities.
+
+**Features:**
+- **Full-Sheet Awareness**: Reads ALL data from ALL tabs before processing
+- **Q&A Mode**: Answer questions about your data
+- **Action Mode**: Execute data operations (add, update, delete, etc.)
+- **Read-Think-Act Architecture**: Analyzes complete context before responding
 
 **Request:**
 ```json
 {
-  "command": "add 2 kilos of apples to my grocery list",
+  "command": "How much does John owe in total?",
   "sessionId": "user123"
 }
 ```
 
-**Success Response:**
+**Q&A Response (type: "answer"):**
 ```json
 {
   "status": "success",
-  "message": "Command processed successfully",
+  "message": "Question answered successfully",
+  "type": "answer",
+  "data": {
+    "original_command": "How much does John owe in total?",
+    "answer": "Based on your sheet data, John owes $3,000 total (2.5kg of apples at $1,200/kg).",
+    "action_type": "answer"
+  }
+}
+```
+
+**Action Response (type: "action"):**
+```json
+{
+  "status": "success",
+  "message": "Command processed successfully", 
+  "type": "action",
   "data": {
     "original_command": "add 2 kilos of apples to my grocery list",
     "interpreted_action": {
@@ -188,6 +219,9 @@ Main endpoint for natural language voice commands.
       "pricePerKg": 1000,
       "status": "pending"
     },
+    "sheets_response": {...}
+  }
+}
     "sheets_response": {
       "status": "success",
       "message": "Added \"apples\" to groceries"
@@ -379,7 +413,8 @@ The enhanced Google Apps Script supports these operations:
 | `updateRowInSheet()` | Modify existing rows | Changing quantities, prices |
 | `deleteRowFromSheet()` | Remove rows | Deleting mistakes, old items |
 | `findRowInSheet()` | Search functionality | Finding specific items |
-| `readSheetContents()` | View entire sheets | Getting shopping lists |
+| `readSheetContents()` | View single sheets | Getting shopping lists |
+| `readAllSheetsContents()` | **NEW!** Read ALL sheets | Full-sheet awareness for Q&A |
 | `createNewSheet()` | Create new tabs | Organizing by category |
 | `formatCellRange()` | Style cells | Highlighting important data |
 
