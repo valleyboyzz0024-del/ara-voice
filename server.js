@@ -3,7 +3,6 @@ const path = require('path');
 const cors = require('cors');
 const axios = require('axios');
 const axiosRetry = require('axios-retry').default;
-const OpenAI = require('openai');
 const config = require('./config');
 const { validateAuth, validateBearerToken, validateSpokenPin, validateSecretPhrase, parseVoiceCommand, sendToGoogleSheets } = require('./index');
 
@@ -19,14 +18,6 @@ axiosRetry(axios, {
 });
 
 const app = express();
-
-// Initialize OpenAI client (only if API key is provided)
-let openai = null;
-if (!config.useMockAI) {
-  openai = new OpenAI({
-    apiKey: config.openaiApiKey,
-  });
-}
 
 // Context storage for conversation continuity
 const conversationContexts = new Map();
@@ -46,7 +37,7 @@ app.get('/config', (req, res) => {
   res.status(200).json({ 
     googleAppsScriptUrl: config.googleAppsScriptUrl ? 'Configured' : 'Missing',
     port: config.port,
-    aiMode: config.useMockAI ? 'Mock AI' : 'OpenAI'
+    aiMode: process.env.GROK_API_KEY ? 'Grok AI' : 'Mock AI'
   });
 });
 
@@ -206,7 +197,7 @@ app.post('/voice-command', async (req, res) => {
     const sessionId = req.body.sessionId || 'default';
     
     // Process command with AI
-    const aiResult = await processNaturalLanguageCommand(req.body.command, sessionId);
+    const aiResult = await processAICommand(req.body.command, sessionId);
     
     if (!aiResult.success) {
       return res.status(400).json({ 
@@ -295,108 +286,76 @@ app.post('/voice-command', async (req, res) => {
 
 // Helper function to parse voice commands is now imported from index.js
 
-/**
- * Process natural language command using AI
- * @param {string} naturalCommand - Natural language command
- * @param {string} sessionId - Session ID for context continuity
- * @returns {Object} - Processed command with action and parameters
- */
-async function processNaturalLanguageCommand(naturalCommand, sessionId = 'default') {
-  console.log('Processing natural language command:', naturalCommand);
+async function processAICommand(naturalCommand, sessionId) {
+  // Check if the Grok API key is present
+  if (!process.env.GROK_API_KEY) {
+    console.error('ERROR: GROK_API_KEY environment variable is not set.');
+    return mockAIProcessing(naturalCommand, sessionId);
+  }
+
+  const context = conversationContexts.get(sessionId) || [];
   
+  const systemPrompt = `You are an intelligent assistant for a voice-controlled Google Sheets app. Your task is to interpret natural language commands and convert them into a JSON object representing the action. The user is speaking to you.
+
+  Supported actions: addRow, deleteRow, readSheet, createSheet.
+
+  For addRow actions, respond with JSON like:
+  {
+    "action": "addRow",
+    "tabName": "groceries",
+    "item": "apples",
+    "qty": 2.5,
+    "pricePerKg": 1200,
+    "status": "owes"
+  }
+
+  For other actions, infer the appropriate parameters. Be intelligent about missing information - use reasonable defaults or ask for clarification.`;
+
+  context.push({ role: 'user', content: naturalCommand });
+
   try {
-    if (config.useMockAI) {
-      return mockAIProcessing(naturalCommand, sessionId);
-    }
-    
-    // Get conversation context
-    let context = conversationContexts.get(sessionId) || [];
-    
-    const systemPrompt = `You are a Google Sheets assistant that converts natural language commands into structured actions.
-
-Available actions:
-- addRow: Add a new row to a sheet
-- updateRow: Update an existing row  
-- deleteRow: Delete a row
-- findRow: Search for rows
-- readSheet: Read sheet contents
-- createSheet: Create a new sheet
-- formatCell: Format cells
-
-For addRow actions, respond with JSON like:
-{
-  "action": "addRow",
-  "tabName": "groceries",
-  "item": "apples",
-  "qty": 2.5,
-  "pricePerKg": 1200,
-  "status": "owes"
-}
-
-For other actions, infer the appropriate parameters. Be intelligent about missing information - use reasonable defaults or ask for clarification.
-
-Examples:
-- "add 2 kilos of bananas to grocery list" → addRow with reasonable price
-- "delete the last item I added" → deleteRow (track context)
-- "what's on my shopping list" → readSheet
-- "create a work projects sheet" → createSheet`;
-
-    // Add user message to context
-    context.push({ role: 'user', content: naturalCommand });
-    
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...context.slice(-10) // Keep last 10 messages for context
-      ],
-      temperature: 0.1,
-      max_tokens: 500
+    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.GROK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'grok-4-latest', // Using the correct model name from your test
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...context.slice(-10)
+        ],
+        temperature: 0.1,
+        max_tokens: 500,
+        stream: false
+      }),
     });
 
-    const response = completion.choices[0].message.content;
-    
-    // Add AI response to context
-    context.push({ role: 'assistant', content: response });
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Grok API error: ${response.status} ${response.statusText} - ${errorBody}`);
+    }
+
+    const completion = await response.json();
+    const reply = completion.choices[0].message.content;
+
+    context.push({ role: 'assistant', content: reply });
     conversationContexts.set(sessionId, context);
-    
-    // Try to parse as JSON
+
     try {
-      const parsed = JSON.parse(response);
+      const parsed = JSON.parse(reply);
       return { success: true, data: parsed };
     } catch (parseError) {
-      // If not JSON, treat as a clarification request
-      return { 
-        success: false, 
-        error: response,
-        needsClarification: true 
+      return {
+        success: false,
+        error: reply,
+        needsClarification: true
       };
     }
-    
+
   } catch (error) {
-    console.error('Error in AI processing:', error);
-    
-    // Handle specific OpenAI API errors
-    if (error.status === 401) {
-      return {
-        success: false,
-        error: 'OpenAI API key is invalid or expired. Please check your OPENAI_API_KEY environment variable.',
-        errorType: 'API_KEY_ERROR'
-      };
-    } else if (error.status === 429) {
-      return {
-        success: false,
-        error: 'OpenAI API rate limit exceeded. Please try again later.',
-        errorType: 'RATE_LIMIT_ERROR'
-      };
-    } else if (error.status >= 500) {
-      return {
-        success: false,
-        error: 'OpenAI service is temporarily unavailable. Please try again later.',
-        errorType: 'SERVICE_ERROR'
-      };
-    }
-    
+    console.error('Error in AI processing with Grok:', error);
     return {
       success: false,
       error: `AI processing failed: ${error.message}`,
