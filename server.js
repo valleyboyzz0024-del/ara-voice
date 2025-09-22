@@ -1,136 +1,36 @@
-const express = require('express');
-const path = require('path');
-const cors = require('cors');
-const axios = require('axios');
-const axiosRetry = require('axios-retry').default;
-const config = require('./config');
-const { validateAuth, validateBearerToken, validateSpokenPin, validateSecretPhrase, parseVoiceCommand, sendToGoogleSheets } = require('./index');
+// Use dotenv to load environment variables from a .env file for local development
+import dotenv from 'dotenv';
+dotenv.config();
 
-const authenticatedSessions = new Map(); // <-- Added for session tracking
+import express from 'express';
+import webhookHandler from './src/webhook.js';
 
-// Configure axios retry for resilient Google Apps Script requests
-axiosRetry(axios, {
-  retries: 3,
-  retryDelay: axiosRetry.exponentialDelay,
-  retryCondition: (error) => {
-    return axiosRetry.isNetworkOrIdempotentRequestError(error) || (error.response && error.response.status >= 500);
-  }
-});
-
-// Define the 'app' variable by creating a new Express application
 const app = express();
+// Use a port from the environment variable (for Render) or default to 3000
+const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+// Middleware to parse incoming JSON bodies
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
-// Webhook endpoint to handle voice commands
-app.post('/webhook/voice', async (req, res) => {
-  try {
-    console.log('Received webhook voice command:', req.body);
-    console.log('Authorization header:', req.headers.authorization);
-
-    let isAuthenticated = false;
-    let authMethod = '';
-    const sessionId = req.headers['x-session-id'] || 'default';
-    const command = req.body.command || req.body.transcript;
-
-    if (!command) {
-        return res.status(400).json({
-            status: 'error',
-            message: 'No valid command or transcript provided'
-        });
-    }
-
-    if (typeof command === 'string') {
-        if (validateSecretPhrase(command.trim())) {
-            isAuthenticated = true;
-            authMethod = 'Secret phrase';
-            if (command.trim().toLowerCase() === config.auth.secretPhrase.toLowerCase()) {
-                return res.json({
-                    status: 'success',
-                    message: 'Secret phrase authenticated. You can now send your voice command.',
-                    authMethod: 'Secret phrase'
-                });
-            }
-        }
-    }
-
-    if (!isAuthenticated && validateBearerToken(req.headers.authorization)) {
-        isAuthenticated = true;
-        authMethod = 'Bearer token';
-    }
-
-    if (!isAuthenticated && typeof command === 'string') {
-        const words = command.toLowerCase().trim().split(/\s+/);
-        if (words.length >= 3 && words[0] === 'pin' && words[1] === 'is') {
-            const spokenPin = words[2];
-            if (validateSpokenPin(spokenPin)) {
-                authenticatedSessions.set(sessionId, Date.now() + 300000);
-                return res.json({
-                    status: 'success',
-                    message: 'PIN authenticated. You can now send your voice command.',
-                    authMethod: 'Spoken PIN'
-                });
-            } else {
-                return res.status(401).json({
-                    status: 'error',
-                    message: 'Invalid PIN'
-                });
-            }
-        }
-        const sessionAuth = authenticatedSessions.get(sessionId);
-        if (sessionAuth && sessionAuth > Date.now()) {
-            isAuthenticated = true;
-            authMethod = 'Session (PIN authenticated)';
-            authenticatedSessions.delete(sessionId);
-        }
-    }
-
-    if (!isAuthenticated) {
-        return res.status(401).json({
-            status: 'error',
-            message: 'Authentication required. Use secret phrase, Bearer token, or spoken PIN.'
-        });
-    }
-
-    console.log(`Authenticated via ${authMethod}`);
-
-    const parsedCommand = await parseVoiceCommand(command);
-
-    if (!parsedCommand.success) {
-        return res.status(400).json({
-            status: 'error',
-            message: parsedCommand.error
-        });
-    }
-
-    const sheetsResponse = await sendToGoogleSheets(parsedCommand.data);
-    
-    res.json({
-        status: 'success',
-        message: 'Command processed successfully via webhook',
-        authMethod: authMethod,
-        data: {
-            parsed: parsedCommand.data,
-            sheets_response: sheetsResponse
-        }
-    });
-
-  } catch (error) {
-    console.error('Unexpected error in /webhook/voice:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error',
-      details: error.message
-    });
-  }
+// A simple root route to confirm the server is running
+app.get('/', (req, res) => {
+    res.send('AI Webhook server is alive!');
 });
 
-// Start server
-const PORT = config.port;
+// The main webhook route that uses your handler logic
+app.post('/webhook', webhookHandler);
+
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Google Apps Script URL: ${config.googleAppsScriptUrl ? 'Configured' : 'MISSING'}`);
+    console.log(`Server running on port ${PORT}`);
+    // These logs will appear in your Render logs to confirm setup
+    if (process.env.GOOGLE_APPS_SCRIPT_URL) {
+        console.log('Google Apps Script URL: Configured');
+    } else {
+        console.warn('Warning: GOOGLE_APPS_SCRIPT_URL is not configured.');
+    }
+    if (process.env.OPENAI_API_KEY) {
+        console.log('OpenAI API Key: Configured');
+    } else {
+        console.warn('Warning: OPENAI_API_KEY is not configured.');
+    }
 });
