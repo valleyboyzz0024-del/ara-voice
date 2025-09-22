@@ -6,6 +6,8 @@ const axiosRetry = require('axios-retry').default;
 const config = require('./config');
 const { validateAuth, validateBearerToken, validateSpokenPin, validateSecretPhrase, parseVoiceCommand, sendToGoogleSheets } = require('./index');
 
+const authenticatedSessions = new Map(); // <-- Added for session tracking
+
 // Configure axios retry for resilient Google Apps Script requests
 axiosRetry(axios, {
   retries: 3,
