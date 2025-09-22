@@ -1,3 +1,29 @@
+const express = require('express');
+const path = require('path');
+const cors = require('cors');
+const axios = require('axios');
+const axiosRetry = require('axios-retry').default;
+const config = require('./config');
+const { validateAuth, validateBearerToken, validateSpokenPin, validateSecretPhrase, parseVoiceCommand, sendToGoogleSheets } = require('./index');
+
+// Configure axios retry for resilient Google Apps Script requests
+axiosRetry(axios, {
+  retries: 3,
+  retryDelay: axiosRetry.exponentialDelay,
+  retryCondition: (error) => {
+    return axiosRetry.isNetworkOrIdempotentRequestError(error) || (error.response && error.response.status >= 500);
+  }
+});
+
+// Define the 'app' variable by creating a new Express application
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Webhook endpoint to handle voice commands
 app.post('/webhook/voice', async (req, res) => {
   try {
     console.log('Received webhook voice command:', req.body);
@@ -6,7 +32,7 @@ app.post('/webhook/voice', async (req, res) => {
     let isAuthenticated = false;
     let authMethod = '';
     const sessionId = req.headers['x-session-id'] || 'default';
-    const command = req.body.command || req.body.transcript; // This is the fix
+    const command = req.body.command || req.body.transcript;
 
     if (!command) {
         return res.status(400).json({
@@ -15,7 +41,6 @@ app.post('/webhook/voice', async (req, res) => {
         });
     }
 
-    // Authentication logic remains the same
     if (typeof command === 'string') {
         if (validateSecretPhrase(command.trim())) {
             isAuthenticated = true;
@@ -70,7 +95,6 @@ app.post('/webhook/voice', async (req, res) => {
 
     console.log(`Authenticated via ${authMethod}`);
 
-    // Parse the voice command
     const parsedCommand = await parseVoiceCommand(command);
 
     if (!parsedCommand.success) {
@@ -80,7 +104,6 @@ app.post('/webhook/voice', async (req, res) => {
         });
     }
 
-    // Now send the parsed data to Google Sheets
     const sheetsResponse = await sendToGoogleSheets(parsedCommand.data);
     
     res.json({
@@ -101,4 +124,11 @@ app.post('/webhook/voice', async (req, res) => {
       details: error.message
     });
   }
+});
+
+// Start server
+const PORT = config.port;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Google Apps Script URL: ${config.googleAppsScriptUrl ? 'Configured' : 'MISSING'}`);
 });
