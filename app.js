@@ -1,766 +1,146 @@
-/**
- * Ara Voice - The Google Sheets God
- * Main application server with comprehensive AI and Google Sheets integration
- */
-
 require('dotenv').config();
 const express = require('express');
-const session = require('express-session');
-const path = require('path');
-const config = require('./config');
-
-// Import utility functions
-const { 
-  validateBearerToken, 
-  validateSpokenPin, 
-  validateSecretPhrase,
-  parseVoiceCommand,
-  sendToGoogleSheets 
-} = require('./index');
-
-// Import new modules
-const GoogleSheetsAPI = require('./src/sheetsAPI');
-const SessionManager = require('./src/sessionManager');
+const { OpenAI } = require('openai');
+const axios = require('axios');
 
 const app = express();
+const port = process.env.PORT || 3000;
 
-// Session middleware
-app.use(session({
-  secret: config.session?.secret || process.env.SESSION_SECRET || 'test-session-secret',
-  resave: config.session?.resave || false,
-  saveUninitialized: config.session?.saveUninitialized || false,
-  cookie: { 
-    maxAge: config.session?.maxAge || 30 * 60 * 1000,
-    secure: process.env.NODE_ENV === 'production' // Use secure cookies in production
-  }
-}));
+// --- Configuration ---
+const GOOGLE_APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL;
+const USE_MOCK_AI = !process.env.OPENAI_API_KEY;
 
-// Other middleware
-app.use(express.json());
+const openai = USE_MOCK_AI ? null : new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
+
+// --- Middleware ---
 app.use(express.static('public'));
+app.use(express.json());
 
-// Initialize services
-const sessionManager = new SessionManager();
-const googleSheetsAPI = new GoogleSheetsAPI();
-
-/**
- * Enhanced AI Processing with Context Awareness
- */
-class EnhancedAIProcessor {
-  constructor() {
-    this.openai = null;
-    if (!config.useMockAI && config.openaiApiKey) {
-      try {
-        const { OpenAI } = require('openai');
-        this.openai = new OpenAI({
-          apiKey: config.openaiApiKey,
-        });
-      } catch (error) {
-        console.warn('OpenAI not available, using mock responses:', error.message);
-        config.useMockAI = true;
-      }
-    }
-  }
-
-  async processCommand(command, sessionId = 'default', sheetData = null) {
-    const context = sessionManager.getConversationContext(sessionId);
-    
-    if (config.useMockAI || !this.openai) {
-      return this.mockAIProcess(command, sessionId, sheetData, context);
-    }
-
-    try {
-      // Determine if this is a complex analytical query or simple action
-      const model = this.selectOptimalModel(command, context);
-      const systemPrompt = this.buildEnhancedSystemPrompt(sheetData, context);
-      
-      console.log(`Using ${model} for command: "${command.substring(0, 50)}..."`);
-      
-      const response = await this.openai.chat.completions.create({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: command }
-        ],
-        temperature: 0.7,
-        max_tokens: model === 'gpt-4' ? 1000 : 500
-      });
-
-      return this.parseAIResponse(response.choices[0].message.content);
-    } catch (error) {
-      console.error('OpenAI API error:', error);
-      return this.mockAIProcess(command, sessionId, sheetData, context);
-    }
-  }
-
-  /**
-   * Select optimal model based on command complexity for cost optimization
-   */
-  selectOptimalModel(command, context) {
-    const command_lower = command.toLowerCase();
-    
-    // Use GPT-4 for complex analytical queries
-    const complexPatterns = [
-      /breakdown|analyze|compare|summary|trend|calculate total|how much.*total|what.*average/i,
-      /show.*all|list.*all|give.*summary|provide.*breakdown/i,
-      /complex.*calculation|multiple.*operations|advanced.*query/i
-    ];
-    
-    // Check if this is a complex analytical command
-    const isComplex = complexPatterns.some(pattern => pattern.test(command));
-    
-    // Check if user has been asking multiple related analytical questions
-    const recentAnalyticalQueries = context.recentHistory.filter(h => 
-      h.type === 'answer' && /breakdown|analyze|total|summary/.test(h.command)
-    ).length;
-    
-    if (isComplex || recentAnalyticalQueries >= 2) {
-      return 'gpt-4';
-    }
-    
-    // Use GPT-3.5 Turbo for simple operations and data entry
-    return 'gpt-3.5-turbo';
-  }
-
-  buildEnhancedSystemPrompt(sheetData, context) {
-    let prompt = `You are the Google Sheets God - an AI assistant that can answer questions about spreadsheet data and execute sheet operations.
-
-Current sheet data: ${JSON.stringify(sheetData || {}, null, 2)}
-
-Recent conversation context:
-- Recent actions: ${JSON.stringify(context.recentActions, null, 2)}
-- Preferred sheet: ${context.preferredSheetName}
-- Recent history: ${JSON.stringify(context.recentHistory.map(h => ({command: h.command, type: h.type})), null, 2)}
-
-You can either:
-1. ANSWER questions about the data (respond with JSON: {"type": "answer", "answer": "your response"})
-2. EXECUTE actions on the sheet (respond with JSON: {"type": "action", "action": "addRow|updateRow|deleteRow|createSheet", "tabName": "sheet name", "item": "item", "qty": number, "pricePerKg": number, "status": "status"})
-
-When users refer to "the last item I added" or similar, use the recent actions context.
-Always respond with valid JSON.`;
-
-    return prompt;
-  }
-
-  parseAIResponse(response) {
-    try {
-      return JSON.parse(response);
-    } catch (error) {
-      // If JSON parsing fails, treat as an answer
-      return {
-        type: 'answer',
-        answer: response
-      };
-    }
-  }
-
-  mockAIProcess(command, sessionId, sheetData, context) {
-    const commandLower = command.toLowerCase();
-    
-    // Mock sheet data for testing (enhanced with context)
-    const mockData = {
-      groceries: [
-        { item: 'apples', qty: 2.5, pricePerKg: 1200, status: 'owes', person: 'Hulk' },
-        { item: 'bananas', qty: 1, pricePerKg: 800, status: 'pending', person: 'User' }
-      ]
-    };
-
-    // Handle contextual references
-    if (commandLower.includes('last') || commandLower.includes('just added') || commandLower.includes('recent')) {
-      if (context.recentActions && context.recentActions.length > 0) {
-        const lastAction = context.recentActions[0];
-        if (commandLower.includes('delete') || commandLower.includes('remove')) {
-          return {
-            type: 'action',
-            action: 'deleteRow',
-            tabName: lastAction.tabName || 'groceries',
-            item: lastAction.item,
-            qty: 0,
-            pricePerKg: 0,
-            status: 'deleted'
-          };
-        }
-        return {
-          type: 'answer',
-          answer: `Your last action was adding ${lastAction.item} to ${lastAction.tabName} sheet.`,
-          action_type: 'answer'
-        };
-      }
-    }
-
-    // Question detection
-    if (commandLower.includes('how much') || commandLower.includes('what') || commandLower.includes('show') || commandLower.includes('?')) {
-      if (commandLower.includes('hulk')) {
-        return {
-          type: 'answer',
-          answer: 'Based on your sheet data, Hulk owes $3,000 total (2.5kg of apples at $1,200/kg).',
-          action_type: 'answer'
-        };
-      }
-      if (commandLower.includes('pending')) {
-        return {
-          type: 'answer',
-          answer: 'You have pending items: bananas (1kg at $800/kg).',
-          action_type: 'answer'
-        };
-      }
-      if (commandLower.includes('items') || commandLower.includes('list')) {
-        return {
-          type: 'answer',
-          answer: 'Your grocery list contains: apples (2.5kg at $1,200/kg) and bananas (1kg at $800/kg).',
-          action_type: 'answer'
-        };
-      }
-      if (commandLower.includes('show') && (commandLower.includes('items') || commandLower.includes('list'))) {
-        if (commandLower.includes('pending')) {
-          return {
-            type: 'answer',
-            answer: 'You have pending items: bananas (1kg at $800/kg).',
-            action_type: 'answer'
-          };
-        }
-        return {
-          type: 'answer',
-          answer: 'Your grocery list contains: apples (2.5kg at $1,200/kg) and bananas (1kg at $800/kg).',
-          action_type: 'answer'
-        };
-      }
-      if (commandLower.includes('meaning') || commandLower.includes('life')) {
-        return {
-          type: 'answer',
-          answer: 'I can help you with questions about your sheet data and execute operations. What would you like to know?',
-          action_type: 'answer'
-        };
-      }
-      return {
-        type: 'answer',
-        answer: 'I can help you with questions about your sheet data. What specific information would you like to know?',
-        action_type: 'answer'
-      };
-    }
-
-    // Action detection
-    if (commandLower.includes('add') || commandLower.includes('put')) {
-      // Extract details from natural language
-      const item = this.extractItem(commandLower);
-      const qty = this.extractQuantity(commandLower);
-      const price = this.extractPrice(commandLower);
-      const tabName = this.extractTabName(commandLower) || context.preferredSheetName;
-      const status = this.extractStatus(commandLower);
-
-      return {
-        type: 'action',
-        action: 'addRow',
-        tabName: tabName || 'groceries',
-        item: item || 'unknown',
-        qty: qty || 1,
-        pricePerKg: price || 1000,
-        status: status || 'pending'
-      };
-    }
-
-    // Default response
-    return {
-      type: 'answer',
-      answer: 'I understand you want to work with your Google Sheets. Can you be more specific about what you\'d like to do?'
-    };
-  }
-
-  extractItem(text) {
-    const items = ['apples', 'bananas', 'oranges', 'bread', 'milk', 'eggs'];
-    for (const item of items) {
-      if (text.includes(item)) return item;
-    }
-    // Try to extract item mentioned with "of"
-    const ofMatch = text.match(/of\s+(\w+)/);
-    if (ofMatch) return ofMatch[1];
-    return 'item';
-  }
-
-  extractQuantity(text) {
-    // Look for number followed by kg/kilo/kilogram
-    const match = text.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilogram)/);
-    if (match) return parseFloat(match[1]);
-    
-    // Look for just a number before "of"
-    const ofMatch = text.match(/(\d+(?:\.\d+)?)\s+(?:of|kilo)/);
-    if (ofMatch) return parseFloat(ofMatch[1]);
-    
-    return 1;
-  }
-
-  extractPrice(text) {
-    const match = text.match(/(?:at|for)\s*(\d+)(?:\s*(?:per|\/)\s*kg)?/);
-    return match ? parseInt(match[1]) : 1000;
-  }
-
-  extractTabName(text) {
-    const tabs = ['groceries', 'grocery', 'shopping', 'work', 'personal'];
-    for (const tab of tabs) {
-      if (text.includes(tab)) return tab === 'grocery' ? 'groceries' : tab;
-    }
-    return 'groceries';
-  }
-
-  extractStatus(text) {
-    if (text.includes('owes') || text.includes('owe')) return 'owes';
-    if (text.includes('paid')) return 'paid';
-    return 'pending';
-  }
-}
-
-const aiProcessor = new EnhancedAIProcessor();
-
-// Routes
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    timestamp: new Date().toISOString(),
-    config: {
-      googleAppsScriptConfigured: !!config.googleAppsScriptUrl,
-      openaiConfigured: !config.useMockAI,
-      googleSheetsAPIConfigured: googleSheetsAPI.initialized,
-      activeSessions: sessionManager.getActiveSessions().length
-    }
-  });
-});
-
-// Root route
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Google OAuth routes
-app.get('/auth/google', (req, res) => {
-  try {
-    const authUrl = googleSheetsAPI.getAuthUrl();
-    res.redirect(authUrl);
-  } catch (error) {
-    res.status(500).json({ 
-      error: 'Google OAuth not configured',
-      message: error.message
-    });
-  }
-});
-
-app.get('/auth/google/callback', async (req, res) => {
-  try {
-    const { code } = req.query;
-    const tokens = await googleSheetsAPI.getTokensFromCode(code);
-    
-    // Store tokens in session
-    const sessionId = req.session.id || 'default';
-    sessionManager.setUserAuth(sessionId, tokens);
-    
-    res.redirect('/?auth=success');
-  } catch (error) {
-    console.error('OAuth callback error:', error);
-    res.redirect('/?auth=error');
-  }
-});
-
-// Session management routes
-app.get('/session/status', (req, res) => {
-  const sessionId = req.session.id || 'default';
-  const stats = sessionManager.getSessionStats(sessionId);
-  const isAuthenticated = sessionManager.isUserAuthenticated(sessionId);
-  
-  res.json({
-    ...stats,
-    authenticated: isAuthenticated,
-    googleSheetsAPI: googleSheetsAPI.initialized
-  });
-});
-
-app.post('/session/clear', (req, res) => {
-  const sessionId = req.session.id || 'default';
-  const cleared = sessionManager.clearSession(sessionId);
-  req.session.destroy();
-  
-  res.json({ 
-    success: cleared,
-    message: cleared ? 'Session cleared' : 'Session not found'
-  });
-});
-
-// Main conversational endpoint (enhanced)
+// --- Main Voice Command Endpoint ---
 app.post('/voice-command', async (req, res) => {
-  try {
-    const { command, sessionId: providedSessionId } = req.body;
-    const sessionId = providedSessionId || req.session.id || 'default';
-
-    if (!command || typeof command !== 'string' || command.trim().length === 0) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'No valid command provided'
-      });
-    }
-
-    console.log(`Processing command for session ${sessionId}:`, command);
-
-    // Try to get real sheet data if Google Sheets API is available
-    let sheetData = null;
-    const currentSpreadsheetId = sessionManager.getCurrentSpreadsheet(sessionId);
-    
-    if (googleSheetsAPI.initialized && currentSpreadsheetId) {
-      try {
-        sheetData = await googleSheetsAPI.readAllData(currentSpreadsheetId);
-      } catch (error) {
-        console.warn('Could not read sheet data:', error.message);
-      }
-    }
-
-    // Process with AI
-    const aiResponse = await aiProcessor.processCommand(command, sessionId, sheetData);
-    
-    let result = {
-      status: 'success',
-      type: aiResponse.type,
-      data: {
-        original_command: command,
-        ...aiResponse
-      }
-    };
-
-    // If it's an action, execute it
-    if (aiResponse.type === 'action') {
-      // Always set the interpreted action first
-      result.data.interpreted_action = {
-        action: aiResponse.action,
-        tabName: aiResponse.tabName,
-        item: aiResponse.item,
-        qty: aiResponse.qty,
-        pricePerKg: aiResponse.pricePerKg,
-        status: aiResponse.status
-      };
-
-      // Try Google Sheets API first, then fallback to Google Apps Script
-      let sheetsSuccess = false;
-      
-      if (googleSheetsAPI.initialized) {
-        try {
-          let spreadsheetId = currentSpreadsheetId;
-          
-          // Get or create spreadsheet if needed
-          if (!spreadsheetId) {
-            spreadsheetId = await googleSheetsAPI.getOrCreateSpreadsheet('Ara Voice Data');
-            sessionManager.setCurrentSpreadsheet(sessionId, spreadsheetId);
-          }
-
-          // Execute the action
-          switch (aiResponse.action) {
-            case 'addRow':
-              await googleSheetsAPI.addRow(spreadsheetId, aiResponse.tabName, {
-                item: aiResponse.item,
-                qty: aiResponse.qty,
-                pricePerKg: aiResponse.pricePerKg,
-                status: aiResponse.status
-              });
-              break;
-            // Add other actions as needed
-          }
-          
-          result.data.sheets_api_response = { success: true, method: 'Google Sheets API' };
-          result.message = `Added "${aiResponse.item}" to ${aiResponse.tabName} via Google Sheets API`;
-          sheetsSuccess = true;
-        } catch (error) {
-          console.warn('Google Sheets API failed, trying fallback:', error.message);
-        }
-      }
-
-      // Fallback to Google Apps Script
-      if (!sheetsSuccess) {
-        try {
-          const sheetsResponse = await sendToGoogleSheets({
-            tab: aiResponse.tabName,
-            item: aiResponse.item,
-            qty: aiResponse.qty,
-            price: aiResponse.pricePerKg,
-            status: aiResponse.status
-          });
-
-          result.data.sheets_response = sheetsResponse.response;
-          result.message = `Added "${aiResponse.item}" to ${aiResponse.tabName}`;
-        } catch (error) {
-          console.error('Sheets operation failed:', error);
-          result.data.sheets_error = error.message;
-          result.message = 'Command understood but sheets operation failed';
-        }
-      }
-    } else if (aiResponse.type === 'answer') {
-      // Handle analytical queries with real data
-      if (googleSheetsAPI.initialized && currentSpreadsheetId) {
-        try {
-          const commandLower = command.toLowerCase();
-          
-          // Handle specific analytical queries
-          if (commandLower.includes('breakdown') || commandLower.includes('summary')) {
-            const summary = await googleSheetsAPI.calculateSummary(currentSpreadsheetId);
-            result.data.analytical_data = summary;
-            
-            // Generate more detailed response
-            let summaryText = 'Here\'s your data breakdown:\n';
-            Object.entries(summary.sheets).forEach(([sheetName, sheetData]) => {
-              summaryText += `\n${sheetName}: ${sheetData.totalRows} items, $${sheetData.totalValue.toFixed(2)} total value\n`;
-              if (Object.keys(sheetData.statusBreakdown).length > 0) {
-                summaryText += `Status: ${Object.entries(sheetData.statusBreakdown).map(([status, count]) => `${count} ${status}`).join(', ')}\n`;
-              }
-            });
-            result.data.answer = summaryText;
-            
-          } else if (commandLower.includes('owe') || commandLower.includes('debt')) {
-            // Extract person name if mentioned
-            const personMatch = command.match(/\b([A-Z][a-z]+)\b/);
-            const person = personMatch ? personMatch[1] : null;
-            
-            const personTotals = await googleSheetsAPI.calculatePersonTotals(currentSpreadsheetId, person);
-            result.data.debt_analysis = personTotals;
-            
-            let debtText = person ? `${person}'s debt summary:\n` : 'Debt summary for all people:\n';
-            Object.entries(personTotals).forEach(([name, data]) => {
-              debtText += `\n${name}: $${data.totalOwed.toFixed(2)} owed, $${data.totalPaid.toFixed(2)} paid, $${data.totalPending.toFixed(2)} pending\n`;
-            });
-            result.data.answer = debtText;
-            
-          } else if (commandLower.includes('show') && (commandLower.includes('pending') || commandLower.includes('items'))) {
-            const filters = {};
-            
-            if (commandLower.includes('pending')) {
-              filters.status = 'pending';
-            }
-            
-            const filteredData = await googleSheetsAPI.getFilteredData(currentSpreadsheetId, filters);
-            result.data.filtered_data = filteredData;
-            
-            let itemsText = 'Here are your items:\n';
-            Object.entries(filteredData).forEach(([sheetName, rows]) => {
-              itemsText += `\n${sheetName}:\n`;
-              rows.forEach(row => {
-                const qty = row.Quantity || row.qty || 0;
-                const price = row['Price/kg'] || row.pricePerKg || 0;
-                const item = row.Item || row.item || 'Unknown';
-                const status = row.Status || row.status || 'unknown';
-                itemsText += `- ${item}: ${qty}kg at $${price}/kg (${status})\n`;
-              });
-            });
-            result.data.answer = itemsText;
-          }
-        } catch (error) {
-          console.warn('Analytics query failed:', error.message);
-          // Fall back to original AI response
-        }
-      }
-      
-      result.message = 'Question answered successfully';
-    }
-
-    // Store interaction in session
-    sessionManager.addInteraction(sessionId, {
-      command,
-      response: result,
-      type: aiResponse.type,
-      success: !result.data.sheets_error
-    });
-
-    res.json(result);
-
-  } catch (error) {
-    console.error('Voice command processing error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to process voice command',
-      error: error.message
-    });
-  }
-});
-
-// Enhanced webhook endpoint with session support
-app.post('/webhook/voice', (req, res) => {
-  try {
-    const { command } = req.body;
-    const authHeader = req.headers.authorization;
-    const sessionId = req.headers['x-session-id'] || 'webhook-default';
-
+    let { command } = req.body;
     if (!command) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'No command provided'
-      });
+        return res.status(400).json({ status: 'error', message: 'Command is empty' });
     }
+    const userCommand = command.toLowerCase().trim();
 
-    let authMethod = null;
+    try {
+        if (USE_MOCK_AI) {
+            return res.json({ status: 'success', answer: `Mock AI received: '${userCommand}'.` });
+        }
 
-    // Check Bearer token authentication
-    if (validateBearerToken(authHeader)) {
-      authMethod = 'Bearer token';
-    } 
-    // Check spoken PIN authentication
-    else {
-      const words = command.split(' ');
-      const possiblePin = words[0];
-      if (validateSpokenPin(possiblePin)) {
-        authMethod = 'Spoken PIN';
-        // Remove PIN from command
-        command = words.slice(1).join(' ');
-      }
+        // --- FIX: Step 1 - Get all available sheet names from Google Sheets ---
+        // We now directly access the 'data' from the axios response, as Google Scripts can wrap it.
+        const sheetsResponse = await axios.post(GOOGLE_APPS_SCRIPT_URL, { action: 'getSheetNames' });
+        const responseData = sheetsResponse.data;
+
+        if (responseData.status === 'error') {
+            throw new Error(`Google Apps Script Error: ${responseData.message}`);
+        }
+        
+        const availableSheets = responseData.sheetNames;
+        if (!availableSheets || !Array.isArray(availableSheets)) {
+             throw new Error("Could not retrieve sheet names from Google. Please ensure the Apps Script is deployed correctly.");
+        }
+        const availableSheetsString = availableSheets.join(', ');
+
+        // --- Step 2: Determine User Intent (Read vs. Write) ---
+        const intentResponse = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+                { role: "system", content: `You are an intent classifier for a Google Sheet. The user gives a command. Determine if they want to 'WRITE' new data (add, create, log) or 'READ' existing data (ask a question, what is, how many, summarize). Your response must be a single word: READ or WRITE. The available sheets are: ${availableSheetsString}.` },
+                { role: "user", content: userCommand }
+            ],
+            max_tokens: 5,
+        });
+        const intent = intentResponse.choices[0].message.content.trim().toUpperCase();
+
+        // --- Step 3: Execute based on intent ---
+        if (intent === 'WRITE') {
+            const answer = await handleWriteCommand(userCommand, availableSheetsString);
+            res.json({ status: 'success', answer });
+        } else if (intent === 'READ') {
+            const answer = await handleReadCommand(userCommand, availableSheetsString);
+            res.json({ status: 'success', answer });
+        } else {
+            res.status(500).json({ status: 'error', message: `AI could not determine intent. Classified as: ${intent}` });
+        }
+
+    } catch (error) {
+        console.error('Error processing command:', error.response ? error.response.data : error.message);
+        const errorMessage = error.response?.data?.message || error.message || 'An internal server error occurred.';
+        res.status(500).json({ status: 'error', message: errorMessage });
     }
+});
 
-    if (!authMethod) {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Authentication required'
-      });
-    }
-
-    // Parse and process the command
-    const parseResult = parseVoiceCommand(command);
+async function handleWriteCommand(command, availableSheetsString) {
+    const writePrompt = `You are a data parsing AI for Google Sheets. The user wants to add data. Your job is to identify the correct sheet and parse the data. The available sheets are: [${availableSheetsString}].
+    From the user's command, determine the single most appropriate sheet to write to.
+    Parse the user's command into a JSON object with "sheetName" (must be one of the available sheets) and "data" (an array of values for the new row).
+    User command: "${command}"`;
     
-    if (!parseResult.success) {
-      return res.status(400).json({
-        status: 'error',
-        message: parseResult.error
-      });
-    }
-
-    // Send to Google Sheets
-    sendToGoogleSheets(parseResult.data)
-      .then(result => {
-        // Store in session
-        sessionManager.addInteraction(sessionId, {
-          command,
-          response: result,
-          type: 'action',
-          success: true
-        });
-
-        res.json({
-          status: 'success',
-          message: 'Command processed successfully via webhook',
-          authMethod: authMethod,
-          data: {
-            parsed: parseResult.data,
-            result: result.response
-          }
-        });
-      })
-      .catch(error => {
-        res.status(500).json({
-          status: 'error',
-          message: 'Failed to process command',
-          error: error.message
-        });
-      });
-
-  } catch (error) {
-    console.error('Webhook error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error',
-      error: error.message
+    const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        response_format: { type: "json_object" },
+        messages: [
+            { role: "system", content: writePrompt },
+            { role: "user", content: command }
+        ],
     });
-  }
-});
 
-// Legacy process-command endpoint
-app.post('/process-command', (req, res) => {
-  try {
-    const { command } = req.body;
+    const parsedData = JSON.parse(response.choices[0].message.content);
 
-    if (!command) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'No command provided'
-      });
-    }
-
-    const parseResult = parseVoiceCommand(command);
-    
-    if (!parseResult.success) {
-      return res.status(400).json({
-        status: 'error',
-        message: parseResult.error
-      });
-    }
-
-    sendToGoogleSheets(parseResult.data)
-      .then(result => {
-        res.json({
-          status: 'success',
-          message: 'Command processed successfully',
-          data: {
-            parsed: parseResult.data,
-            result: result.response
-          }
-        });
-      })
-      .catch(error => {
-        res.status(500).json({
-          status: 'error',
-          message: 'Failed to process command',
-          error: error.message
-        });
-      });
-
-  } catch (error) {
-    console.error('Process command error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error',
-      error: error.message
+    await axios.post(GOOGLE_APPS_SCRIPT_URL, {
+        action: 'addRow',
+        sheetName: parsedData.sheetName,
+        data: parsedData.data
     });
-  }
-});
 
-// Config status endpoint
-app.get('/config', (req, res) => {
-  res.json({
-    googleAppsScriptConfigured: !!config.googleAppsScriptUrl,
-    openaiConfigured: !config.useMockAI,
-    googleSheetsAPIConfigured: googleSheetsAPI.initialized,
-    authMethods: {
-      secretPhrase: !!config.auth.secretPhrase,
-      bearerToken: !!config.auth.bearerToken,
-      spokenPin: !!config.auth.spokenPin
-    },
-    features: {
-      sessionManagement: true,
-      conversationalContext: true,
-      googleSheetsAPI: googleSheetsAPI.initialized,
-      oauth: !!config.google.clientId
-    }
-  });
-});
-
-// Admin endpoint for session management
-app.get('/admin/sessions', (req, res) => {
-  // In production, add proper admin authentication
-  res.json({
-    activeSessions: sessionManager.getActiveSessions(),
-    totalSessions: sessionManager.sessions.size
-  });
-});
-
-// Export app for testing
-module.exports = app;
-
-// Cleanup on exit
-process.on('SIGINT', () => {
-  console.log('Shutting down gracefully...');
-  sessionManager.destroy();
-  process.exit(0);
-});
-
-// Start server if not in test mode
-if (process.env.NODE_ENV !== 'test') {
-  const PORT = config.port || 3000;
-  app.listen(PORT, () => {
-    console.log(`🎤 Ara Voice - Google Sheets God running on port ${PORT}`);
-    console.log(`📊 Google Apps Script: ${config.googleAppsScriptUrl ? 'Configured' : 'Not configured'}`);
-    console.log(`🔗 Google Sheets API: ${googleSheetsAPI.initialized ? 'Configured' : 'Not configured'}`);
-    console.log(`🤖 OpenAI: ${config.useMockAI ? 'Using mock AI' : 'Configured'}`);
-    console.log(`🔐 Authentication: Ready`);
-    console.log(`💾 Session Management: Active`);
-  });
+    return `Okay, I've added that to the '${parsedData.sheetName}' sheet.`;
 }
+
+async function handleReadCommand(command, availableSheetsString) {
+    // Step 1: Figure out which sheet the user is asking about
+    const sheetNameResponse = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+            { role: "system", content: `You are a sheet name identifier. From the user's question, identify the single most likely sheet name they are asking about. Respond with only that sheet name. The available sheets are: [${availableSheetsString}].` },
+            { role: "user", content: command }
+        ],
+        max_tokens: 25,
+    });
+    const sheetName = sheetNameResponse.choices[0].message.content.trim().replace(/['".]/g, '');
+
+    // Step 2: Fetch the data from that sheet
+    const scriptResponse = await axios.post(GOOGLE_APPS_SCRIPT_URL, {
+        action: 'read',
+        sheetName: sheetName
+    });
+
+    if (scriptResponse.data.status === 'error') {
+        throw new Error(`Google Apps Script Error: ${scriptResponse.data.message}`);
+    }
+    const sheetData = scriptResponse.data.data;
+
+    // Step 3: Give the AI the data and the question to formulate an answer
+    const answerResponse = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+            { role: "system", content: "You are a helpful AI assistant for Google Sheets. The user asked a question, and here is the relevant data from their sheet in JSON format. Formulate a friendly, natural language answer to their question. Be direct and helpful." },
+            { role: "user", content: `My question was: "${command}"\n\nHere is the data from the '${sheetName}' sheet:\n${JSON.stringify(sheetData)}` }
+        ],
+        max_tokens: 300,
+    });
+    
+    return answerResponse.choices[0].message.content;
+}
+
+// --- Server Start ---
+app.listen(port, () => {
+    console.log(`Server listening on http://localhost:${port}`);
+    if (USE_MOCK_AI) console.warn('WARNING: OPENAI_API_KEY not found. Running in MOCK AI mode.');
+    else console.log('OpenAI API key found. Running in LIVE AI mode.');
+    if (!GOOGLE_APPS_SCRIPT_URL) console.error('FATAL: GOOGLE_APPS_SCRIPT_URL is not set in .env file!');
+});
