@@ -14,9 +14,9 @@ let app;
 describe('Conversational Data Assistant Tests', () => {
   beforeAll(() => {
     // Import server after mocking to avoid starting it
-    delete require.cache[require.resolve('../server')];
+    delete require.cache[require.resolve('../app')];
     process.env.NODE_ENV = 'test';
-    app = require('../server');
+    app = require('../app');
   });
 
   describe('/voice-command endpoint', () => {

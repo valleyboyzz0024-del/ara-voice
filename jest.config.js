@@ -3,7 +3,7 @@ module.exports = {
   testMatch: ['**/tests/**/*.test.js'],
   collectCoverageFrom: [
     'index.js',
-    'server.js',
+    'app.js',
     '!tests/**'
   ],
   verbose: true,

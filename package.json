@@ -2,10 +2,12 @@
   "name": "voice-webhook",
   "version": "1.0.1",
   "description": "An AI-powered secure webhook for voice commands to Google Sheets.",
-  "main": "server.js",
-  "type": "module",
+  "main": "app.js",
+  "type": "commonjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node app.js",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "keywords": [
     "webhook",
@@ -16,8 +18,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "axios": "^1.6.0",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "express": "^4.19.2", 
     "openai": "^4.29.1"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "supertest": "^6.3.0"
   }
 }
