@@ -56,7 +56,12 @@ async function getGoogleAuth() {
     try {
         if (process.env.GOOGLE_CREDENTIALS) {
             const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-            return google.auth.fromJSON(credentials);
+            // Instead of using fromJSON directly, create a proper GoogleAuth instance
+            const auth = new google.auth.GoogleAuth({
+                credentials: credentials,
+                scopes: 'https://www.googleapis.com/auth/spreadsheets',
+            });
+            return auth;
         }
         return new google.auth.GoogleAuth({
             keyFile: 'google-credentials.json',
