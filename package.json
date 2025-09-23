@@ -4,7 +4,8 @@
   "description": "A voice-powered AI assistant for Google Sheets.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "jest"
   },
   "author": "",
   "license": "ISC",
