@@ -1,38 +1,65 @@
 import express from 'express';
+import session from 'express-session';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
 import { handleCommand } from './aiHandler.js';
 
-// Setup for serving static files from the 'public' folder
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 10000;
 
+// Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For parsing login form data
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Password Protection Middleware
-const checkPassword = (req, res, next) => {
-    const { password } = req.body;
-    const appPassword = process.env.APP_PASSWORD;
+// Session Configuration
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'a-very-secret-key-that-should-be-in-env',
+    resave: false,
+    saveUninitialized: true,
+    cookie: { maxAge: 24 * 60 * 60 * 1000 } // Session expires after 24 hours
+}));
 
-    if (!appPassword || password === appPassword) {
-        next(); // Password is correct, proceed.
-    } else {
-        res.status(401).json({ error: 'Unauthorized: Incorrect password.' });
+// Middleware to protect routes
+const isAuthenticated = (req, res, next) => {
+    if (req.session.isAuthenticated) {
+        return next();
     }
+    res.redirect('/'); // If not logged in, send to login page
 };
 
-// Main API endpoint for all commands from the chat interface
-app.post('/command', checkPassword, async (req, res) => {
+// --- ROUTES ---
+
+// 1. Serve the login page at the root URL
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// 2. Handle the password submission from the login form
+app.post('/login', (req, res) => {
+    const { password } = req.body;
+    if (password === process.env.APP_PASSWORD) {
+        req.session.isAuthenticated = true; // Set session cookie
+        res.redirect('/chat');
+    } else {
+        res.redirect('/'); // Failed login
+    }
+});
+
+// 3. Serve the chat page, but only if authenticated
+app.get('/chat', isAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'chat.html'));
+});
+
+// 4. Handle API commands, but only if authenticated
+app.post('/command', isAuthenticated, async (req, res) => {
     try {
+        // We no longer need the password in the body because the session confirms authentication
         const { messages, smartMode } = req.body;
-        if (!messages) {
-            return res.status(400).json({ error: 'Request body must include messages.' });
-        }
         const reply = await handleCommand(messages, smartMode);
         res.json({ reply });
     } catch (error) {

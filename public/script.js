@@ -1,6 +1,4 @@
 // --- CONFIGURATION ---
-// IMPORTANT: Replace "12345" with the actual password you set in Render.
-const APP_PASSWORD = "purplepeopledancekeyboardpig";
 const API_ENDPOINT = "/command";
 
 // --- DOM ELEMENTS ---
@@ -14,7 +12,8 @@ let conversationHistory = [];
 // --- EVENT LISTENERS ---
 sendButton.addEventListener('click', sendMessage);
 userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
         sendMessage();
     }
 });
@@ -25,7 +24,7 @@ function addMessageToUI(sender, text) {
     messageElement.classList.add('message', `${sender}-message`);
     messageElement.textContent = text;
     chatMessages.appendChild(messageElement);
-    chatMessages.scrollTop = chatMessages.scrollHeight; // Auto-scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 function showThinkingIndicator() {
@@ -43,7 +42,7 @@ async function sendMessage() {
 
     addMessageToUI('user', text);
     conversationHistory.push({ role: 'user', content: text });
-    userInput.value = ''; // Clear input field
+    userInput.value = '';
 
     const thinkingIndicator = showThinkingIndicator();
 
@@ -54,11 +53,16 @@ async function sendMessage() {
             body: JSON.stringify({
                 messages: conversationHistory,
                 smartMode: smartModeToggle.checked,
-                password: APP_PASSWORD
             })
         });
 
         chatMessages.removeChild(thinkingIndicator);
+
+        if (response.status === 401) {
+            alert("Session expired. Please log in again.");
+            window.location.href = "/";
+            return;
+        }
 
         if (!response.ok) {
             const errorData = await response.json();

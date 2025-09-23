@@ -7,7 +7,6 @@ const openai = new OpenAI({
 
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
 
-// This function sends a command to your Google Apps Script
 async function executeSheetCommand(command) {
     if (!APPS_SCRIPT_URL) {
         throw new Error("APPS_SCRIPT_URL is not configured on the server.");
@@ -19,9 +18,8 @@ async function executeSheetCommand(command) {
     return response.data.message || 'Task completed successfully.';
 }
 
-// This function gets ALL data from your sheets to give the AI context
 async function getAllSheetDataForContext() {
-    if (!APPS_SCRIPT_URL) return null; // Can't get context if URL isn't set
+    if (!APPS_SCRIPT_URL) return null;
     const response = await axios.post(APPS_SCRIPT_URL, { action: 'readAllSheets' });
     if (response.data.status === 'success') {
         return response.data.data;
@@ -29,17 +27,15 @@ async function getAllSheetDataForContext() {
     return null;
 }
 
-// This is the main handler function called by the server
 async function handleCommand(messages, smartMode) {
     const userMessage = messages[messages.length - 1].content;
     const model = smartMode ? 'gpt-4o' : 'gpt-3.5-turbo';
 
-    // First, ask a cheap model to quickly determine if it's a sheet command
     const intentResponse = await openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: [{
             role: 'system',
-            content: `Analyze the user's message. Do they want to perform a specific action on a spreadsheet (add, update, delete, find, read, create, summarize, analyze data, etc.)? Respond with only "YES" or "NO".`
+            content: `Analyze the user's message. Does the user want to perform a specific action on a spreadsheet (add, update, delete, find, read, create, summarize, analyze data, etc.)? Respond with only "YES" or "NO".`
         }, {
             role: 'user',
             content: userMessage
@@ -63,7 +59,7 @@ async function handleCommand(messages, smartMode) {
         User Command: "${userMessage}"`;
 
         const commandResponse = await openai.chat.completions.create({
-            model: model, // Use the smart model for complex commands
+            model: model,
             messages: [{ role: 'system', content: commandSystemPrompt }],
             response_format: { type: 'json_object' },
         });
@@ -72,7 +68,6 @@ async function handleCommand(messages, smartMode) {
         return await executeSheetCommand(commandJson);
 
     } else {
-        // It's a general conversation. Use the full history for a natural chat.
         const chatSystemPrompt = {
             role: 'system',
             content: 'You are Ara, a helpful and friendly AI assistant. Engage in a natural conversation.'
