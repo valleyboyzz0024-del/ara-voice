@@ -125,7 +125,7 @@ async function sendToGoogleSheets(data) {
   try {
     console.log('Sending to Google Apps Script:', JSON.stringify(data, null, 2));
     
-    const response = await axios.post(config.googleAppsScript.url, {
+    const response = await axios.post(config.googleAppsScriptUrl, {
       tabName: data.tab,
       item: data.item,
       qty: data.qty,
@@ -136,7 +136,7 @@ async function sendToGoogleSheets(data) {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      timeout: config.googleAppsScript.timeout
+      timeout: config.requestTimeout
     });
     
     console.log('Google Apps Script response:', response.data);
