@@ -1,30 +1,16 @@
 {
-  "name": "ara-voice",
+  "name": "ara-voice-ai",
   "version": "1.0.0",
-  "description": "A voice-powered AI assistant for Google Sheets.",
+  "description": "A conversational AI assistant for Google Sheets.",
   "main": "server.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "test": "jest"
+    "start": "node server.js"
   },
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "axios": "^1.7.2",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "fluent-ffmpeg": "^2.1.3",
-    "google-auth-library": "^9.11.0",
-    "googleapis": "^140.0.0",
-    "multer": "^1.4.5-lts.1",
     "openai": "^4.47.1"
-  },
-  "engines": {
-    "node": "18.x"
-  },
-  "devDependencies": {
-    "axios": "^1.12.2",
-    "jest": "^30.1.3",
-    "supertest": "^7.1.4"
   }
 }

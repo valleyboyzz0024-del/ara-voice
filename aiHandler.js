@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import fetch from 'node-fetch';
+import axios from 'axios';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -7,62 +7,83 @@ const openai = new OpenAI({
 
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
 
-async function handleCommand(messages, isSmartMode) {
-  if (!messages || messages.length === 0) {
-    throw new Error('Message history is empty.');
-  }
-
-  const lastUserMessage = messages[messages.length - 1].content;
-  const model = isSmartMode ? 'gpt-4-turbo' : 'gpt-3.5-turbo';
-
-  const systemPrompt = {
-    role: 'system',
-    content: `You are Ara, a witty, helpful, and slightly sarcastic voice assistant.
-- Your primary function is to manage a user's Google Sheet by interpreting natural language commands.
-- To execute a sheet command, you MUST respond in the format: { "action": "ACTION_TYPE", "params": { "key": "value" } }.
-- Supported actions are: 'add_expense', 'add_idea', 'log_event'.
-- For 'add_expense', params are 'item' and 'amount'.
-- For 'add_idea', params are 'idea'.
-- For 'log_event', params are 'event_name' and 'details'.
-- Example: If the user says "buy milk for 5.99", you respond with: { "action": "add_expense", "params": { "item": "milk", "amount": 5.99 } }
-- If the user's request is NOT a sheet command, engage in a normal, helpful, and conversational manner. Do NOT output JSON.
-- Keep conversational responses concise and to the point, suitable for a voice assistant.`
-  };
-  
-  const messagesForAPI = [systemPrompt, ...messages];
-
-  const aiDecision = await openai.chat.completions.create({
-    model: model,
-    messages: messagesForAPI,
-    temperature: 0.5,
-  });
-
-  const responseText = aiDecision.choices[0].message.content;
-
-  try {
-    const jsonResponse = JSON.parse(responseText);
-    if (jsonResponse.action && jsonResponse.params) {
-      console.log('Executing Google Sheet command:', jsonResponse.action);
-      
-      const scriptResponse = await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(jsonResponse),
-      });
-
-      if (!scriptResponse.ok) {
-        throw new Error(`Google Apps Script failed with status: ${scriptResponse.status}`);
-      }
-
-      const scriptResult = await scriptResponse.json();
-      
-      return { response: scriptResult.message };
+// This function sends a command to your Google Apps Script
+async function executeSheetCommand(command) {
+    if (!APPS_SCRIPT_URL) {
+        throw new Error("APPS_SCRIPT_URL is not configured on the server.");
     }
-  } catch (error) {
-    console.log('Received conversational response from AI.');
-  }
+    const response = await axios.post(APPS_SCRIPT_URL, command);
+    if (response.data.status === 'error') {
+        throw new Error(`Google Sheets Error: ${response.data.message}`);
+    }
+    return response.data.message || 'Task completed successfully.';
+}
 
-  return { response: responseText };
+// This function gets ALL data from your sheets to give the AI context
+async function getAllSheetDataForContext() {
+    if (!APPS_SCRIPT_URL) return null; // Can't get context if URL isn't set
+    const response = await axios.post(APPS_SCRIPT_URL, { action: 'readAllSheets' });
+    if (response.data.status === 'success') {
+        return response.data.data;
+    }
+    return null;
+}
+
+// This is the main handler function called by the server
+async function handleCommand(messages, smartMode) {
+    const userMessage = messages[messages.length - 1].content;
+    const model = smartMode ? 'gpt-4o' : 'gpt-3.5-turbo';
+
+    // First, ask a cheap model to quickly determine if it's a sheet command
+    const intentResponse = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [{
+            role: 'system',
+            content: `Analyze the user's message. Do they want to perform a specific action on a spreadsheet (add, update, delete, find, read, create, summarize, analyze data, etc.)? Respond with only "YES" or "NO".`
+        }, {
+            role: 'user',
+            content: userMessage
+        }],
+        max_tokens: 3,
+    });
+    const isSheetCommand = intentResponse.choices[0].message.content.trim().toUpperCase() === 'YES';
+
+    if (isSheetCommand) {
+        const sheetDataContext = await getAllSheetDataForContext();
+
+        const commandSystemPrompt = `You are an expert-level Google Sheets AI assistant. Your task is to convert the user's command into a precise JSON object for our API.
+        Available actions: "addRow", "updateRow", "deleteRow", "findRow", "readSheet", "readAllSheets", "createSheetWithData".
+        - For "updateRow" or "deleteRow", you must infer a "criteria" object to find the correct row(s). Example: {"criteria": {"Item": "Apples"}}
+        - For "addRow", the data should be in a "newData" object. Example: {"newData": {"Item": "Milk", "Status": "Pending"}}
+        - Do not add conversational text. Respond ONLY with the JSON object.
+        - The user may not know the exact tab name. Use the sheet data context to infer the correct "tabName".
+        
+        Sheet Data Context: ${JSON.stringify(sheetDataContext)}
+        
+        User Command: "${userMessage}"`;
+
+        const commandResponse = await openai.chat.completions.create({
+            model: model, // Use the smart model for complex commands
+            messages: [{ role: 'system', content: commandSystemPrompt }],
+            response_format: { type: 'json_object' },
+        });
+
+        const commandJson = JSON.parse(commandResponse.choices[0].message.content);
+        return await executeSheetCommand(commandJson);
+
+    } else {
+        // It's a general conversation. Use the full history for a natural chat.
+        const chatSystemPrompt = {
+            role: 'system',
+            content: 'You are Ara, a helpful and friendly AI assistant. Engage in a natural conversation.'
+        };
+
+        const chatResponse = await openai.chat.completions.create({
+            model: model,
+            messages: [chatSystemPrompt, ...messages],
+        });
+        return chatResponse.choices[0].message.content;
+    }
 }
 
 export { handleCommand };

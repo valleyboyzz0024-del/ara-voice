@@ -1,55 +1,46 @@
 import express from 'express';
-import bodyParser from 'body-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import 'dotenv/config';
 import { handleCommand } from './aiHandler.js';
 
+// Setup for serving static files from the 'public' folder
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
-const APP_PASSWORD = process.env.APP_PASSWORD;
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-app.use(express.static(path.join(__dirname)));
-app.use(bodyParser.json());
+// Password Protection Middleware
+const checkPassword = (req, res, next) => {
+    const { password } = req.body;
+    const appPassword = process.env.APP_PASSWORD;
 
-const authenticate = (req, res, next) => {
-  if (!APP_PASSWORD) {
-    console.warn("WARNING: APP_PASSWORD is not set. The server is not secure.");
-    return next();
-  }
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Authorization header is required.' });
-  }
-  const providedPassword = authHeader.split(' ')[1];
-  if (providedPassword !== APP_PASSWORD) {
-    return res.status(403).json({ error: 'Forbidden: Invalid password.' });
-  }
-  next();
+    if (!appPassword || password === appPassword) {
+        next(); // Password is correct, proceed.
+    } else {
+        res.status(401).json({ error: 'Unauthorized: Incorrect password.' });
+    }
 };
 
-app.post('/command', authenticate, async (req, res) => {
-  const { messages, isSmartMode } = req.body;
-
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    return res.status(400).json({ error: 'A valid message history is required' });
-  }
-  try {
-    const result = await handleCommand(messages, isSmartMode);
-    res.json(result);
-  } catch (error) {
-    console.error('Error processing command:', error);
-    res.status(500).json({ error: 'Failed to process command', details: error.message });
-  }
-});
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// Main API endpoint for all commands from the chat interface
+app.post('/command', checkPassword, async (req, res) => {
+    try {
+        const { messages, smartMode } = req.body;
+        if (!messages) {
+            return res.status(400).json({ error: 'Request body must include messages.' });
+        }
+        const reply = await handleCommand(messages, smartMode);
+        res.json({ reply });
+    } catch (error) {
+        console.error('Error in /command endpoint:', error);
+        res.status(500).json({ error: 'An error occurred on the server.' });
+    }
 });
 
 app.listen(port, () => {
-  console.log(`Server listening on port ${port}. Visit your URL to see the chat interface.`);
+    console.log(`Ara AI server is running on port ${port}.`);
 });
