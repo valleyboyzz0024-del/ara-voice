@@ -72,8 +72,7 @@ async function getSheetData() {
     try {
         const auth = await getGoogleAuth();
         if (!auth) throw new Error("Google Authentication failed.");
-        const client = await auth.getClient();
-        const sheets = google.sheets({ version: "v4", auth: client });
+        const sheets = google.sheets({ version: "v4", auth: auth });
         let allSheetData = {};
         for (const config of SHEETS_CONFIG) {
             console.log(`Fetching data from sheet: "${config.name}" (Range: ${config.range})`);
