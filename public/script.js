@@ -1,6 +1,6 @@
 // --- CONFIGURATION ---
 // IMPORTANT: Replace "12345" with the actual password you set in Render.
-const APP_PASSWORD = "12345";
+const APP_PASSWORD = "purplepeopledancekeyboardpig";
 const API_ENDPOINT = "/command";
 
 // --- DOM ELEMENTS ---
