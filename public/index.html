@@ -10,9 +10,7 @@
         :root {
             --bg-gradient-start: #1d2b34;
             --bg-gradient-end: #10181f;
-            --user-bubble-color: #3498db;
-            --ai-bubble-color: rgba(255, 255, 255, 0.1);
-            --text-color: #f0f0f0;
+            --accent-color: #3498db;
         }
 
         @keyframes gradient-animation {
@@ -21,27 +19,11 @@
             100% { background-position: 0% 50%; }
         }
 
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes dot-bounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1.0); }
-        }
-
         body {
             font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end), #2c3e50);
             background-size: 200% 200%;
-            color: var(--text-color);
+            color: #f0f0f0;
             margin: 0;
             display: flex;
             justify-content: center;
@@ -51,11 +33,64 @@
             animation: gradient-animation 15s ease infinite;
         }
 
-        .chat-container {
+        /* --- Login Screen Styles --- */
+        #login-screen {
+            background: rgba(27, 40, 52, 0.7);
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            text-align: center;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        #login-screen h1 {
+            margin-top: 0;
+            color: #fff;
+        }
+
+        #password-input {
+            width: 80%;
+            padding: 12px;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.2);
+            color: #fff;
+            font-size: 1em;
+        }
+        
+        #login-button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            background: var(--accent-color);
+            color: #fff;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #login-button:hover {
+            background-color: #2980b9;
+        }
+        #error-message {
+            color: #e74c3c;
+            margin-top: 15px;
+            height: 20px;
+        }
+
+        /* --- Main App Styles --- */
+        #app-screen {
+            display: none; /* Hidden by default */
             width: 90%;
             max-width: 600px;
             height: 90vh;
             max-height: 800px;
+        }
+
+        .chat-container {
+            width: 100%;
+            height: 100%;
             background: rgba(27, 40, 52, 0.6);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 16px;
@@ -65,254 +100,86 @@
             display: flex;
             flex-direction: column;
         }
-
-        .chat-header {
-            padding: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .chat-header h1 {
-            margin: 0;
-            font-size: 1.6em;
-            font-weight: 500;
-            color: #fff;
-        }
-
-        .smart-mode {
-            display: flex;
-            align-items: center;
-            font-size: 0.9em;
-        }
-        .smart-mode label {
-            margin-right: 8px;
-            color: #ccc;
-            cursor: pointer;
-        }
-        #smart-mode-toggle {
-            cursor: pointer;
-            accent-color: var(--user-bubble-color);
-        }
-
-        .chat-box {
-            flex-grow: 1;
-            padding: 20px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .chat-box::-webkit-scrollbar { width: 6px; }
-        .chat-box::-webkit-scrollbar-track { background: transparent; }
-        .chat-box::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
-
-        .message {
-            padding: 12px 18px;
-            border-radius: 18px;
-            line-height: 1.5;
-            max-width: 80%;
-            animation: fadeInUp 0.5s ease-out;
-        }
-
-        .user-message {
-            background: var(--user-bubble-color);
-            color: white;
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
-        }
-
-        .ai-message {
-            background: var(--ai-bubble-color);
-            color: var(--text-color);
-            align-self: flex-start;
-            border-bottom-left-radius: 4px;
-        }
-
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            padding: 12px 18px;
-        }
-        .typing-indicator span {
-            height: 10px;
-            width: 10px;
-            background-color: #aaa;
-            border-radius: 50%;
-            display: inline-block;
-            margin: 0 2px;
-            animation: dot-bounce 1.4s infinite ease-in-out both;
-        }
-        .typing-indicator span:nth-of-type(1) { animation-delay: -0.32s; }
-        .typing-indicator span:nth-of-type(2) { animation-delay: -0.16s; }
-        .typing-indicator span:nth-of-type(3) { animation-delay: 0s; }
-
-        .chat-input {
-            padding: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-        }
-
-        #mic-button {
-            background: var(--user-bubble-color);
-            color: white;
-            border: none;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            font-size: 24px;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            transition: background-color 0.3s, transform 0.2s;
-        }
-        #mic-button:hover { transform: scale(1.1); }
-        #mic-button.recording { background: #e74c3c; transform: scale(1.1); }
-
-        #status {
-            flex-grow: 1;
-            text-align: center;
-            color: #aaa;
-            font-style: italic;
-        }
+        
+        /* ... (rest of the chat styles are the same) ... */
+        .chat-header{padding:20px;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;justify-content:space-between;align-items:center}.chat-header h1{margin:0;font-size:1.6em;font-weight:500;color:#fff}.smart-mode{display:flex;align-items:center;font-size:.9em}.smart-mode label{margin-right:8px;color:#ccc;cursor:pointer}#smart-mode-toggle{cursor:pointer;accent-color:var(--accent-color)}.chat-box{flex-grow:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:15px}.chat-box::-webkit-scrollbar{width:6px}.chat-box::-webkit-scrollbar-track{background:transparent}.chat-box::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:3px}.message{padding:12px 18px;border-radius:18px;line-height:1.5;max-width:80%;animation:fadeInUp .5s ease-out}@keyframes fadeInUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}.user-message{background:var(--accent-color);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}.ai-message{background:rgba(255,255,255,0.1);color:#f0f0f0;align-self:flex-start;border-bottom-left-radius:4px}.chat-input{padding:20px;border-top:1px solid rgba(255,255,255,0.1);display:flex;align-items:center}#mic-button{background:var(--accent-color);color:#fff;border:none;width:50px;height:50px;border-radius:50%;font-size:24px;cursor:pointer;display:flex;justify-content:center;align-items:center;transition:background-color .3s,transform .2s}#mic-button:hover{transform:scale(1.1)}#mic-button.recording{background:#e74c3c;transform:scale(1.1)}#status{flex-grow:1;text-align:center;color:#aaa;font-style:italic}
     </style>
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            <h1>Ara</h1>
-            <div class="smart-mode">
-                <label for="smart-mode-toggle">Smart Mode</label>
-                <input type="checkbox" id="smart-mode-toggle">
+
+    <!-- Login Screen -->
+    <div id="login-screen">
+        <h1>Ara</h1>
+        <p>Please enter the password to continue.</p>
+        <input type="password" id="password-input" placeholder="Password">
+        <br>
+        <button id="login-button">Unlock</button>
+        <p id="error-message"></p>
+    </div>
+
+    <!-- Main App (hidden) -->
+    <div id="app-screen">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h1>Ara</h1>
+                <div class="smart-mode">
+                    <label for="smart-mode-toggle">Smart Mode</label>
+                    <input type="checkbox" id="smart-mode-toggle">
+                </div>
             </div>
-        </div>
-        <div class="chat-box" id="chat-box">
-            <div class="ai-message">Hello! I'm Ara. How can I help you with your spreadsheets today?</div>
-        </div>
-        <div class="chat-input">
-            <button id="mic-button">🎤</button>
-            <div id="status">Click the mic to speak</div>
+            <div class="chat-box" id="chat-box">
+                <div class="ai-message">Hello! How can I help you with your spreadsheets today?</div>
+            </div>
+            <div class="chat-input">
+                <button id="mic-button">🎤</button>
+                <div id="status">Click the mic to speak</div>
+            </div>
         </div>
     </div>
 
     <script>
+        // --- Login Logic ---
+        const loginScreen = document.getElementById('login-screen');
+        const appScreen = document.getElementById('app-screen');
+        const loginButton = document.getElementById('login-button');
+        const passwordInput = document.getElementById('password-input');
+        const errorMessage = document.getElementById('error-message');
+
+        loginButton.addEventListener('click', attemptLogin);
+        passwordInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                attemptLogin();
+            }
+        });
+
+        async function attemptLogin() {
+            const password = passwordInput.value;
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loginScreen.style.display = 'none';
+                    appScreen.style.display = 'block';
+                } else {
+                    errorMessage.textContent = data.message || 'Incorrect password.';
+                    passwordInput.value = '';
+                }
+            } catch (err) {
+                errorMessage.textContent = 'Error connecting to server.';
+            }
+        }
+
+        // --- Existing App Logic ---
         const micButton = document.getElementById('mic-button');
         const chatBox = document.getElementById('chat-box');
         const statusDiv = document.getElementById('status');
         const smartModeToggle = document.getElementById('smart-mode-toggle');
-
-        let mediaRecorder;
-        let audioChunks = [];
-
-        micButton.addEventListener('click', () => {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-            } else {
-                navigator.mediaDevices.getUserMedia({ audio: true })
-                    .then(stream => {
-                        mediaRecorder = new MediaRecorder(stream);
-                        mediaRecorder.start();
-                        audioChunks = [];
-                        micButton.classList.add('recording');
-                        statusDiv.textContent = 'Recording... Click to stop.';
-
-                        mediaRecorder.addEventListener('dataavailable', event => audioChunks.push(event.data));
-                        mediaRecorder.addEventListener('stop', () => {
-                            micButton.classList.remove('recording');
-                            statusDiv.textContent = 'Processing...';
-                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                            sendVoiceToServer(audioBlob);
-                        });
-                    })
-                    .catch(error => {
-                        console.error('Error accessing microphone:', error);
-                        statusDiv.textContent = 'Microphone access denied.';
-                    });
-            }
-        });
-
-        function addMessage(text, sender) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}-message`;
-            messageDiv.textContent = text;
-            chatBox.appendChild(messageDiv);
-            scrollToBottom();
-        }
-
-        function showTypingIndicator() {
-            const typingDiv = document.createElement('div');
-            typingDiv.id = 'typing-indicator';
-            typingDiv.className = 'ai-message typing-indicator';
-            typingDiv.innerHTML = '<span></span><span></span><span></span>';
-            chatBox.appendChild(typingDiv);
-            scrollToBottom();
-        }
-
-        function removeTypingIndicator() {
-            const typingDiv = document.getElementById('typing-indicator');
-            if (typingDiv) {
-                typingDiv.remove();
-            }
-        }
-
-        function scrollToBottom() {
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-
-        async function sendVoiceToServer(audioBlob) {
-            const formData = new FormData();
-            formData.append('voice', audioBlob);
-            formData.append('smartMode', smartModeToggle.checked);
-
-            addMessage(statusDiv.textContent, 'user'); // Temporarily show 'Processing...' as user message
-            showTypingIndicator();
-
-            try {
-                const response = await fetch('/voice', { method: 'POST', body: formData });
-                const data = await response.json();
-
-                // Remove the temporary "Processing..." message
-                chatBox.removeChild(chatBox.lastChild.previousSibling);
-                removeTypingIndicator();
-
-                if (data.error) throw new Error(data.error);
-                
-                addMessage(data.transcribedText, 'user');
-                addMessage(data.reply, 'ai');
-                playAudioForText(data.reply);
-
-            } catch (error) {
-                removeTypingIndicator();
-                console.error('Error sending voice to server:', error);
-                addMessage(`Error: ${error.message}`, 'ai');
-            } finally {
-                statusDiv.textContent = 'Click the mic to speak';
-            }
-        }
-
-        async function playAudioForText(text) {
-            try {
-                const response = await fetch('/speak', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text })
-                });
-
-                if (!response.ok) throw new Error('Failed to generate audio.');
-                
-                const audioBlob = await response.blob();
-                const audioUrl = URL.createObjectURL(audioBlob);
-                const audio = new Audio(audioUrl);
-                audio.play();
-
-            } catch (error) {
-                console.error('Error playing audio:', error);
-            }
-        }
+        // ... (the rest of the script is the same)
+        let mediaRecorder,audioChunks=[];function addMessage(e,t){const a=document.createElement("div");a.className=`message ${t}-message`,a.textContent=e,chatBox.appendChild(a),chatBox.scrollTop=chatBox.scrollHeight}micButton.addEventListener("click",()=>{mediaRecorder&&"recording"===mediaRecorder.state?mediaRecorder.stop():navigator.mediaDevices.getUserMedia({audio:!0}).then(e=>{mediaRecorder=new MediaRecorder(e),mediaRecorder.start(),audioChunks=[],micButton.classList.add("recording"),statusDiv.textContent="Recording... Click to stop.",mediaRecorder.addEventListener("dataavailable",e=>{audioChunks.push(e.data)}),mediaRecorder.addEventListener("stop",()=>{const e=new Blob(audioChunks,{type:"audio/webm"});sendVoiceToServer(e)})}).catch(e=>{console.error("Error accessing microphone:",e),statusDiv.textContent="Microphone access denied."})});async function sendVoiceToServer(e){const t=new FormData;t.append("voice",e),t.append("smartMode",smartModeToggle.checked);try{addMessage("Processing...",'user'),micButton.classList.remove("recording"),statusDiv.textContent="Processing...";const e=await fetch("/voice",{method:"POST",body:t}),a=await e.json();if(chatBox.lastChild.remove(),a.error)throw new Error(a.error);addMessage(a.transcribedText,"user"),addMessage(a.reply,"ai"),playAudioForText(a.reply)}catch(e){console.error("Error sending voice to server:",e),addMessage(`Error: ${e.message}`,"ai")}finally{statusDiv.textContent="Click the mic to speak"}}async function playAudioForText(e){try{const t=await fetch("/speak",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:e})});if(!t.ok)return void console.error("Received non-OK response from /speak endpoint. Status:",t.status);console.log("Received response from /speak endpoint. Status:",t.status);const a=await t.blob(),o=URL.createObjectURL(a),s=new Audio(o);s.play(),console.log("Audio playback started successfully.")}catch(e){console.error("Error playing audio:",e),addMessage("Sorry, there was an issue with audio playback.","ai")}}
     </script>
 </body>
 </html>

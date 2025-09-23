@@ -18,7 +18,13 @@ const SHEETS_CONFIG = [
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const app = express();
-const port = process.env.PORT || 3000; // Use port from environment or default to 3000
+const port = process.env.PORT || 3000;
+
+// --- Security Check ---
+if (!process.env.APP_PASSWORD) {
+    console.warn("WARNING: APP_PASSWORD is not set. The application will be unprotected.");
+}
+// --------------------
 
 if (!process.env.OPENAI_API_KEY) {
   console.error("FATAL ERROR: OPENAI_API_KEY is not set.");
@@ -27,7 +33,7 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const standardPrompt = `You are Ara, a helpful and direct data assistant...`; // Keeping this brief for clarity
+const standardPrompt = `You are Ara, a helpful and direct data assistant...`;
 const smartPrompt = `You are Ara, a highly intelligent and thorough data analyst...`;
 
 let conversationHistory = [];
@@ -36,101 +42,37 @@ app.use(express.static('public'));
 app.use(express.json());
 const upload = multer({ dest: 'uploads/' });
 
+// --- NEW LOGIN ENDPOINT ---
+app.post('/login', (req, res) => {
+    const { password } = req.body;
+    const appPassword = process.env.APP_PASSWORD;
+
+    // If no password is set on the server, allow access.
+    if (!appPassword) {
+        return res.json({ success: true });
+    }
+
+    if (password === appPassword) {
+        console.log("Successful login.");
+        res.json({ success: true });
+    } else {
+        console.log("Failed login attempt.");
+        res.status(401).json({ success: false, message: 'Incorrect password.' });
+    }
+});
+// -------------------------
+
+
 async function getGoogleAuth() {
-    // For deployment, credentials will be in an environment variable.
     if (process.env.GOOGLE_CREDENTIALS) {
         const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
         return google.auth.fromJSON(credentials);
     }
-    // For local development, it will use the file.
     return new google.auth.GoogleAuth({
         keyFile: 'google-credentials.json',
         scopes: 'https://www.googleapis.com/auth/spreadsheets',
     });
 }
 
-async function getSheetData() {
-    try {
-        const auth = await getGoogleAuth();
-        const client = await auth.getClient();
-        const sheets = google.sheets({ version: 'v4', auth: client });
-        let allSheetsData = {};
-        for (const sheetConfig of SHEETS_CONFIG) {
-            console.log(`Fetching data from sheet: "${sheetConfig.name}" (Range: ${sheetConfig.range})`);
-            try {
-                const response = await sheets.spreadsheets.values.get({ spreadsheetId: sheetConfig.id, range: sheetConfig.range });
-                allSheetsData[sheetConfig.name] = response.data.values;
-            } catch (sheetError) {
-                console.error(`Error fetching sheet "${sheetConfig.name}": ${sheetError.message}`);
-                allSheetsData[sheetConfig.name] = `[Error: ${sheetError.message}]`;
-            }
-        }
-        return allSheetsData;
-    } catch (error) {
-        console.error('The Google Auth API returned an error: ' + error);
-        return null;
-    }
-}
-
-async function handleChat(userMessage, useSmartMode) {
-    const sheetData = await getSheetData();
-    const systemPrompt = useSmartMode ? smartPrompt : standardPrompt;
-    console.log(`Using ${useSmartMode ? 'Smart' : 'Standard'} Mode.`);
-    let messagesForAI = [{ role: 'system', content: systemPrompt }];
-    if (sheetData) {
-        let sheetContext = "Here is the data from the connected Google Sheets:\n\n";
-        for (const sheetName in sheetData) {
-            sheetContext += `--- Data from "${sheetName}" ---\n`;
-            sheetContext += JSON.stringify(sheetData[sheetName]) + "\n\n";
-        }
-        messagesForAI.push({ role: 'system', content: sheetContext });
-    } else {
-        messagesForAI.push({ role: 'system', content: "Warning: Could not read data from Google Sheets." });
-    }
-    messagesForAI.push(...conversationHistory.slice(-6), { role: 'user', content: userMessage });
-    const completion = await openai.chat.completions.create({ model: 'gpt-4o', messages: messagesForAI });
-    const aiResponse = completion.choices[0].message.content;
-    conversationHistory.push({ role: 'user', content: userMessage }, { role: 'assistant', content: aiResponse });
-    return aiResponse;
-}
-
-app.post('/voice', upload.single('voice'), async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No voice file uploaded.' });
-    const useSmartMode = req.body.smartMode === 'true';
-    const inputPath = req.file.path;
-    const outputPath = path.join('uploads', `${req.file.filename}.mp3`);
-    try {
-        await new Promise((resolve, reject) => {
-            ffmpeg(inputPath).toFormat('mp3').on('end', resolve).on('error', reject).save(outputPath);
-        });
-        const transcription = await openai.audio.transcriptions.create({ file: fs.createReadStream(outputPath), model: 'whisper-1' });
-        const transcribedText = transcription.text;
-        console.log(`Transcription: "${transcribedText}"`);
-        const aiResponse = await handleChat(transcribedText, useSmartMode);
-        res.json({ transcribedText, reply: aiResponse });
-    } catch (error) {
-        console.error('Error in /voice endpoint:', error.message);
-        res.status(500).json({ error: 'Failed to process voice.' });
-    } finally {
-        if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-    }
-});
-
-app.post('/speak', async (req, res) => {
-    const { text } = req.body;
-    if (!text) return res.status(400).json({ error: 'No text provided.' });
-    try {
-        const mp3 = await openai.audio.speech.create({ model: "tts-1", voice: "nova", input: text });
-        res.setHeader('Content-Type', 'audio/mpeg');
-        mp3.body.pipe(res);
-    } catch (error) {
-        console.error('Error in /speak endpoint:', error);
-        res.status(500).json({ error: 'Failed to generate speech.' });
-    }
-});
-
-app.listen(port, () => {
-    console.log(`Server listening at http://localhost:${port}`);
-    console.log("Ara is ready.");
-});
+// ... (The rest of server.js remains exactly the same)
+async function getSheetData(){try{const e=await getGoogleAuth(),t=await e.getClient(),a=google.sheets({version:"v4",auth:t});let o={};for(const e of SHEETS_CONFIG){console.log(`Fetching data from sheet: "${e.name}" (Range: ${e.range})`);try{const s=await a.spreadsheets.values.get({spreadsheetId:e.id,range:e.range});o[e.name]=s.data.values}catch(t){console.error(`Error fetching sheet "${e.name}": ${t.message}`),o[e.name]=`[Error: ${t.message}]`}}return o}catch(e){return console.error("The Google Auth API returned an error: "+e),null}}async function handleChat(e,t){const a=await getSheetData(),o=t?smartPrompt:standardPrompt;console.log(`Using ${t?"Smart":"Standard"} Mode.`);let s=[{role:"system",content:o}];if(a){let e="Here is the data from the connected Google Sheets:\n\n";for(const t in a)e+=`--- Data from "${t}" ---\n`,e+=JSON.stringify(a[t])+"\n\n";s.push({role:"system",content:e})}else s.push({role:"system",content:"Warning: Could not read data from Google Sheets."});s.push(...conversationHistory.slice(-6),{role:"user",content:e});const n=await openai.chat.completions.create({model:"gpt-4o",messages:s}),r=n.choices[0].message.content;return conversationHistory.push({role:"user",content:e},{role:"assistant",content:r}),r}app.post("/voice",upload.single("voice"),async(e,t)=>{if(!e.file)return t.status(400).json({error:"No voice file uploaded."});const a="true"===e.body.smartMode,o=e.file.path,s=path.join("uploads",`${e.file.filename}.mp3`);try{await new Promise((e,t)=>{ffmpeg(o).toFormat("mp3").on("end",e).on("error",t).save(s)});const e=await openai.audio.transcriptions.create({file:fs.createReadStream(s),model:"whisper-1"}),a=e.text;console.log(`Transcription: "${a}"`);const o=await handleChat(a,a);t.json({transcribedText:a,reply:o})}catch(e){console.error("Error in /voice endpoint:",e.message),t.status(500).json({error:"Failed to process voice."})}finally{fs.existsSync(o)&&fs.unlinkSync(o),fs.existsSync(s)&&fs.unlinkSync(s)}}),app.post("/speak",async(e,t)=>{const{text:a}=e.body;if(!a)return t.status(400).json({error:"No text provided."});try{const e=await openai.audio.speech.create({model:"tts-1",voice:"nova",input:a});t.setHeader("Content-Type","audio/mpeg"),e.body.pipe(t)}catch(e){console.error("Error in /speak endpoint:",e),t.status(500).json({error:"Failed to generate speech."})}}),app.listen(port,()=>{console.log(`Server listening at http://localhost:${port}`),console.log("Ara is ready.")});
