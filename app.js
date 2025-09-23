@@ -70,15 +70,20 @@ class EnhancedAIProcessor {
     }
 
     try {
+      // Determine if this is a complex analytical query or simple action
+      const model = this.selectOptimalModel(command, context);
       const systemPrompt = this.buildEnhancedSystemPrompt(sheetData, context);
+      
+      console.log(`Using ${model} for command: "${command.substring(0, 50)}..."`);
+      
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-4',
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: command }
         ],
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: model === 'gpt-4' ? 1000 : 500
       });
 
       return this.parseAIResponse(response.choices[0].message.content);
@@ -86,6 +91,35 @@ class EnhancedAIProcessor {
       console.error('OpenAI API error:', error);
       return this.mockAIProcess(command, sessionId, sheetData, context);
     }
+  }
+
+  /**
+   * Select optimal model based on command complexity for cost optimization
+   */
+  selectOptimalModel(command, context) {
+    const command_lower = command.toLowerCase();
+    
+    // Use GPT-4 for complex analytical queries
+    const complexPatterns = [
+      /breakdown|analyze|compare|summary|trend|calculate total|how much.*total|what.*average/i,
+      /show.*all|list.*all|give.*summary|provide.*breakdown/i,
+      /complex.*calculation|multiple.*operations|advanced.*query/i
+    ];
+    
+    // Check if this is a complex analytical command
+    const isComplex = complexPatterns.some(pattern => pattern.test(command));
+    
+    // Check if user has been asking multiple related analytical questions
+    const recentAnalyticalQueries = context.recentHistory.filter(h => 
+      h.type === 'answer' && /breakdown|analyze|total|summary/.test(h.command)
+    ).length;
+    
+    if (isComplex || recentAnalyticalQueries >= 2) {
+      return 'gpt-4';
+    }
+    
+    // Use GPT-3.5 Turbo for simple operations and data entry
+    return 'gpt-3.5-turbo';
   }
 
   buildEnhancedSystemPrompt(sheetData, context) {
@@ -455,7 +489,70 @@ app.post('/voice-command', async (req, res) => {
           result.message = 'Command understood but sheets operation failed';
         }
       }
-    } else {
+    } else if (aiResponse.type === 'answer') {
+      // Handle analytical queries with real data
+      if (googleSheetsAPI.initialized && currentSpreadsheetId) {
+        try {
+          const commandLower = command.toLowerCase();
+          
+          // Handle specific analytical queries
+          if (commandLower.includes('breakdown') || commandLower.includes('summary')) {
+            const summary = await googleSheetsAPI.calculateSummary(currentSpreadsheetId);
+            result.data.analytical_data = summary;
+            
+            // Generate more detailed response
+            let summaryText = 'Here\'s your data breakdown:\n';
+            Object.entries(summary.sheets).forEach(([sheetName, sheetData]) => {
+              summaryText += `\n${sheetName}: ${sheetData.totalRows} items, $${sheetData.totalValue.toFixed(2)} total value\n`;
+              if (Object.keys(sheetData.statusBreakdown).length > 0) {
+                summaryText += `Status: ${Object.entries(sheetData.statusBreakdown).map(([status, count]) => `${count} ${status}`).join(', ')}\n`;
+              }
+            });
+            result.data.answer = summaryText;
+            
+          } else if (commandLower.includes('owe') || commandLower.includes('debt')) {
+            // Extract person name if mentioned
+            const personMatch = command.match(/\b([A-Z][a-z]+)\b/);
+            const person = personMatch ? personMatch[1] : null;
+            
+            const personTotals = await googleSheetsAPI.calculatePersonTotals(currentSpreadsheetId, person);
+            result.data.debt_analysis = personTotals;
+            
+            let debtText = person ? `${person}'s debt summary:\n` : 'Debt summary for all people:\n';
+            Object.entries(personTotals).forEach(([name, data]) => {
+              debtText += `\n${name}: $${data.totalOwed.toFixed(2)} owed, $${data.totalPaid.toFixed(2)} paid, $${data.totalPending.toFixed(2)} pending\n`;
+            });
+            result.data.answer = debtText;
+            
+          } else if (commandLower.includes('show') && (commandLower.includes('pending') || commandLower.includes('items'))) {
+            const filters = {};
+            
+            if (commandLower.includes('pending')) {
+              filters.status = 'pending';
+            }
+            
+            const filteredData = await googleSheetsAPI.getFilteredData(currentSpreadsheetId, filters);
+            result.data.filtered_data = filteredData;
+            
+            let itemsText = 'Here are your items:\n';
+            Object.entries(filteredData).forEach(([sheetName, rows]) => {
+              itemsText += `\n${sheetName}:\n`;
+              rows.forEach(row => {
+                const qty = row.Quantity || row.qty || 0;
+                const price = row['Price/kg'] || row.pricePerKg || 0;
+                const item = row.Item || row.item || 'Unknown';
+                const status = row.Status || row.status || 'unknown';
+                itemsText += `- ${item}: ${qty}kg at $${price}/kg (${status})\n`;
+              });
+            });
+            result.data.answer = itemsText;
+          }
+        } catch (error) {
+          console.warn('Analytics query failed:', error.message);
+          // Fall back to original AI response
+        }
+      }
+      
       result.message = 'Question answered successfully';
     }
 

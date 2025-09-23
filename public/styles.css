@@ -642,6 +642,27 @@ footer {
 
 /* Mobile responsive updates */
 @media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+  
+  header h1 {
+    font-size: 2.5rem;
+  }
+  
+  .mic-button {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .mic-icon {
+    font-size: 2.5rem;
+  }
+  
+  .command-format code {
+    font-size: 0.8rem;
+  }
+  
   .session-info {
     padding: 1rem;
   }
@@ -660,4 +681,131 @@ footer {
     left: 10px;
     width: auto;
   }
+}
+
+/* Mobile-specific enhancements */
+.mobile-device .mic-button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-controls {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e9ecef;
+}
+
+.mobile-options {
+  display: flex;
+  justify-content: space-around;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--dark);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-slider {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+  background-color: #ccc;
+  border-radius: 24px;
+  transition: background-color 0.3s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s;
+}
+
+.toggle-label input[type="checkbox"]:checked + .toggle-slider {
+  background-color: var(--primary);
+}
+
+.toggle-label input[type="checkbox"]:checked + .toggle-slider::before {
+  transform: translateX(26px);
+}
+
+/* Enhanced touch targets for mobile */
+@media (hover: none) and (pointer: coarse) {
+  .mic-button {
+    width: 140px;
+    height: 140px;
+  }
+  
+  .action-button {
+    min-height: 44px;
+    padding: 0.8rem 1.2rem;
+  }
+  
+  .send-button {
+    min-height: 44px;
+  }
+  
+  .test-form input {
+    min-height: 44px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* Improved mobile voice feedback */
+.voice-feedback-indicator {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--primary);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.voice-feedback-indicator.show {
+  opacity: 1;
+}
+
+/* Enhanced mobile status indicators */
+.mobile-device .status-indicator {
+  font-size: 1.1rem;
+  padding: 1.2rem;
+}
+
+.mobile-device .transcript {
+  font-size: 1rem;
+  min-height: 60px;
+  padding: 1.2rem;
+}
+
+/* Vibration feedback styles */
+.vibrate-on-tap {
+  transition: transform 0.1s ease;
+}
+
+.vibrate-on-tap:active {
+  transform: scale(0.95);
 }

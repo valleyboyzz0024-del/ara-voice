@@ -6,6 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node app.js",
+    "dev": "node app.js",
     "test": "jest",
     "test:watch": "jest --watch"
   },

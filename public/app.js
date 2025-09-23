@@ -1,7 +1,6 @@
 /**
  * Enhanced Frontend for Ara Voice - Google Sheets God
- * Integrates with enhanced backend featuring session management, 
- * Google Sheets API, and conversational AI
+ * Mobile-first design with voice feedback and advanced conversation management
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -23,6 +22,15 @@ document.addEventListener('DOMContentLoaded', () => {
   let sessionId = 'web-session-' + Date.now();
   let isAuthenticated = false;
   let conversationHistory = [];
+  let voiceEnabled = false;
+  
+  // Mobile and accessibility features
+  let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  let wakeLock = null;
+  
+  // Voice synthesis for feedback
+  let speechSynth = window.speechSynthesis;
+  let voiceFeedbackEnabled = localStorage.getItem('voiceFeedback') !== 'false';
   
   // Initialize app
   initializeApp();
@@ -32,8 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
     await checkHealthStatus();
     await checkSessionStatus();
     
-    // Initialize session info display
+    // Initialize UI enhancements
     createSessionInfoPanel();
+    addMobileFeatures();
+    setupVoiceFeedback();
     
     // Check for auth callback
     const urlParams = new URLSearchParams(window.location.search);
@@ -43,6 +53,107 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (urlParams.get('auth') === 'error') {
       showErrorMessage('Google Sheets authentication failed. Please try again.');
     }
+    
+    console.log('🎤 Ara Voice initialized - Mobile:', isMobile, 'Voice Feedback:', voiceFeedbackEnabled);
+  }
+  
+  function addMobileFeatures() {
+    // Add mobile-specific controls
+    if (isMobile) {
+      document.body.classList.add('mobile-device');
+      
+      // Add wake lock toggle for mobile
+      const mobileControls = document.createElement('div');
+      mobileControls.className = 'mobile-controls';
+      mobileControls.innerHTML = `
+        <div class="mobile-options">
+          <label class="toggle-label">
+            <input type="checkbox" id="wakeLockToggle" ${wakeLock ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+            Keep Screen On
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="voiceFeedbackToggle" ${voiceFeedbackEnabled ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+            Voice Feedback
+          </label>
+        </div>
+      `;
+      
+      const voiceController = document.querySelector('.voice-controller');
+      voiceController.appendChild(mobileControls);
+      
+      // Wake lock functionality
+      document.getElementById('wakeLockToggle').addEventListener('change', toggleWakeLock);
+      document.getElementById('voiceFeedbackToggle').addEventListener('change', toggleVoiceFeedback);
+      
+      // Request wake lock on first interaction
+      document.addEventListener('click', requestWakeLock, { once: true });
+    }
+  }
+  
+  async function requestWakeLock() {
+    if ('wakeLock' in navigator && document.getElementById('wakeLockToggle')?.checked) {
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        console.log('Wake lock activated');
+      } catch (err) {
+        console.log('Wake lock failed:', err);
+      }
+    }
+  }
+  
+  async function toggleWakeLock(event) {
+    if (event.target.checked) {
+      await requestWakeLock();
+    } else if (wakeLock) {
+      wakeLock.release();
+      wakeLock = null;
+      console.log('Wake lock released');
+    }
+  }
+  
+  function toggleVoiceFeedback(event) {
+    voiceFeedbackEnabled = event.target.checked;
+    localStorage.setItem('voiceFeedback', voiceFeedbackEnabled);
+    
+    if (voiceFeedbackEnabled) {
+      speakText('Voice feedback enabled');
+    }
+  }
+  
+  function setupVoiceFeedback() {
+    // Voice feedback for better accessibility
+    if (speechSynth && voiceFeedbackEnabled) {
+      console.log('Voice feedback ready');
+    }
+  }
+  
+  function speakText(text, priority = false) {
+    if (!voiceFeedbackEnabled || !speechSynth) return;
+    
+    // Cancel previous speech if high priority
+    if (priority) {
+      speechSynth.cancel();
+    }
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 0.8;
+    
+    // Use a pleasant voice if available
+    const voices = speechSynth.getVoices();
+    const preferredVoice = voices.find(voice => 
+      voice.name.includes('Google') || 
+      voice.name.includes('Microsoft') ||
+      voice.lang.startsWith('en')
+    );
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+    
+    speechSynth.speak(utterance);
   }
   
   function createSessionInfoPanel() {
@@ -317,20 +428,33 @@ document.addEventListener('DOMContentLoaded', () => {
   async function processVoiceCommand(commandData) {
     if (!commandData || !commandData.command) {
       updateStatus('error', 'No valid command detected');
+      speakText('I did not hear a valid command. Please try again.');
       return;
     }
     
     try {
       updateStatus('processing', 'Processing your command...');
+      speakText('Processing your request...', true);
+      
+      // Add vibration feedback on mobile
+      if (isMobile && 'vibrate' in navigator) {
+        navigator.vibrate(50);
+      }
       
       const response = await fetch('/voice-command', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Session-ID': sessionId
         },
         body: JSON.stringify({
           command: commandData.command,
-          sessionId: sessionId
+          sessionId: sessionId,
+          timestamp: new Date().toISOString(),
+          context: {
+            isNaturalLanguage: commandData.isNaturalLanguage,
+            previousCommands: conversationHistory.slice(-3).map(h => h.command)
+          }
         })
       });
       
@@ -341,17 +465,32 @@ document.addEventListener('DOMContentLoaded', () => {
         conversationHistory.push({
           command: commandData.command,
           response: result,
-          timestamp: new Date()
+          timestamp: new Date(),
+          model: result.modelUsed || 'unknown'
         });
+        
+        // Keep only last 10 conversations for performance
+        if (conversationHistory.length > 10) {
+          conversationHistory = conversationHistory.slice(-10);
+        }
         
         updateStatus('success', 'Command processed successfully!');
         displayEnhancedResponse(result);
+        
+        // Provide voice feedback based on response type
+        if (result.data && result.data.type === 'answer') {
+          speakText(result.data.answer);
+        } else if (result.message) {
+          speakText(result.message);
+        } else {
+          speakText('Command completed successfully');
+        }
         
         // Update session status
         await checkSessionStatus();
         
         // Auto-prepare for next command after a successful response
-        setTimeout(waitForNextCommand, 2000);
+        setTimeout(waitForNextCommand, 3000);
         
       } else {
         throw new Error(result.message || 'Unknown error');
@@ -359,7 +498,24 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
       console.error('Error processing command:', error);
       updateStatus('error', `Error: ${error.message}`);
+      speakText(`Sorry, there was an error: ${error.message}`);
       displayErrorResponse(error);
+      
+      // Still prepare for next command after error
+      setTimeout(waitForNextCommand, 2000);
+    }
+  }
+  
+  function waitForNextCommand() {
+    if (!isListening) {
+      updateStatus('ready', 'Ready for next command (press space or click mic)');
+      startButton.classList.add('pulse');
+      setTimeout(() => startButton.classList.remove('pulse'), 1000);
+      
+      // Voice prompt for next command
+      if (voiceFeedbackEnabled && conversationHistory.length > 0) {
+        speakText('Ready for your next command');
+      }
     }
   }
   

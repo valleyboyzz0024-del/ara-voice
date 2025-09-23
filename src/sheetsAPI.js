@@ -446,6 +446,230 @@ class GoogleSheetsAPI {
       throw error;
     }
   }
+
+  /**
+   * Advanced Analytics Functions
+   */
+
+  /**
+   * Calculate totals and summaries for analytical queries
+   */
+  async calculateSummary(spreadsheetId, options = {}) {
+    if (!this.initialized) {
+      throw new Error('Google Sheets API not initialized');
+    }
+
+    try {
+      const allData = await this.readAllData(spreadsheetId);
+      const summary = {
+        totalSheets: Object.keys(allData).length,
+        sheets: {}
+      };
+
+      for (const [sheetName, rows] of Object.entries(allData)) {
+        const sheetSummary = {
+          totalRows: rows.length,
+          totalValue: 0,
+          averagePrice: 0,
+          statusBreakdown: {},
+          itemBreakdown: {},
+          personBreakdown: {},
+          dateRange: { earliest: null, latest: null }
+        };
+
+        rows.forEach(row => {
+          // Calculate totals
+          const qty = parseFloat(row.Quantity || row.qty || 0);
+          const price = parseFloat(row['Price/kg'] || row.pricePerKg || 0);
+          const totalValue = qty * price;
+          sheetSummary.totalValue += totalValue;
+
+          // Status breakdown
+          const status = row.Status || row.status || 'unknown';
+          sheetSummary.statusBreakdown[status] = (sheetSummary.statusBreakdown[status] || 0) + 1;
+
+          // Item breakdown
+          const item = row.Item || row.item || 'unknown';
+          if (!sheetSummary.itemBreakdown[item]) {
+            sheetSummary.itemBreakdown[item] = { count: 0, totalQty: 0, totalValue: 0 };
+          }
+          sheetSummary.itemBreakdown[item].count += 1;
+          sheetSummary.itemBreakdown[item].totalQty += qty;
+          sheetSummary.itemBreakdown[item].totalValue += totalValue;
+
+          // Person breakdown
+          const person = row.Person || row.person || 'unknown';
+          if (!sheetSummary.personBreakdown[person]) {
+            sheetSummary.personBreakdown[person] = { count: 0, totalValue: 0 };
+          }
+          sheetSummary.personBreakdown[person].count += 1;
+          sheetSummary.personBreakdown[person].totalValue += totalValue;
+
+          // Date tracking
+          const timestamp = row.Timestamp || row.timestamp;
+          if (timestamp) {
+            const date = new Date(timestamp);
+            if (date.getTime && !isNaN(date.getTime())) {
+              if (!sheetSummary.dateRange.earliest || date < sheetSummary.dateRange.earliest) {
+                sheetSummary.dateRange.earliest = date;
+              }
+              if (!sheetSummary.dateRange.latest || date > sheetSummary.dateRange.latest) {
+                sheetSummary.dateRange.latest = date;
+              }
+            }
+          }
+        });
+
+        // Calculate averages
+        if (rows.length > 0) {
+          const totalPrices = rows.reduce((sum, row) => {
+            const price = parseFloat(row['Price/kg'] || row.pricePerKg || 0);
+            return sum + (price > 0 ? price : 0);
+          }, 0);
+          const priceCount = rows.filter(row => {
+            const price = parseFloat(row['Price/kg'] || row.pricePerKg || 0);
+            return price > 0;
+          }).length;
+          
+          sheetSummary.averagePrice = priceCount > 0 ? totalPrices / priceCount : 0;
+        }
+
+        summary.sheets[sheetName] = sheetSummary;
+      }
+
+      return summary;
+    } catch (error) {
+      console.error('Error calculating summary:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get filtered data based on criteria (for questions like "show me all debts")
+   */
+  async getFilteredData(spreadsheetId, filters = {}) {
+    if (!this.initialized) {
+      throw new Error('Google Sheets API not initialized');
+    }
+
+    try {
+      const allData = await this.readAllData(spreadsheetId);
+      const filteredResults = {};
+
+      for (const [sheetName, rows] of Object.entries(allData)) {
+        let filteredRows = rows;
+
+        // Apply filters
+        if (filters.status) {
+          filteredRows = filteredRows.filter(row => {
+            const status = (row.Status || row.status || '').toLowerCase();
+            return status.includes(filters.status.toLowerCase());
+          });
+        }
+
+        if (filters.person) {
+          filteredRows = filteredRows.filter(row => {
+            const person = (row.Person || row.person || '').toLowerCase();
+            return person.includes(filters.person.toLowerCase());
+          });
+        }
+
+        if (filters.item) {
+          filteredRows = filteredRows.filter(row => {
+            const item = (row.Item || row.item || '').toLowerCase();
+            return item.includes(filters.item.toLowerCase());
+          });
+        }
+
+        if (filters.dateRange) {
+          filteredRows = filteredRows.filter(row => {
+            const timestamp = row.Timestamp || row.timestamp;
+            if (!timestamp) return false;
+            
+            const date = new Date(timestamp);
+            const { start, end } = filters.dateRange;
+            
+            if (start && date < new Date(start)) return false;
+            if (end && date > new Date(end)) return false;
+            
+            return true;
+          });
+        }
+
+        if (filteredRows.length > 0) {
+          filteredResults[sheetName] = filteredRows;
+        }
+      }
+
+      return filteredResults;
+    } catch (error) {
+      console.error('Error filtering data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate totals by person (for debt tracking)
+   */
+  async calculatePersonTotals(spreadsheetId, person = null) {
+    if (!this.initialized) {
+      throw new Error('Google Sheets API not initialized');
+    }
+
+    try {
+      const allData = await this.readAllData(spreadsheetId);
+      const personTotals = {};
+
+      for (const [sheetName, rows] of Object.entries(allData)) {
+        rows.forEach(row => {
+          const personName = row.Person || row.person || 'Unknown';
+          const qty = parseFloat(row.Quantity || row.qty || 0);
+          const price = parseFloat(row['Price/kg'] || row.pricePerKg || 0);
+          const status = (row.Status || row.status || 'pending').toLowerCase();
+          const totalValue = qty * price;
+
+          // Only calculate for specific person if provided
+          if (person && personName.toLowerCase() !== person.toLowerCase()) {
+            return;
+          }
+
+          if (!personTotals[personName]) {
+            personTotals[personName] = {
+              totalOwed: 0,
+              totalPaid: 0,
+              totalPending: 0,
+              itemCount: 0,
+              items: []
+            };
+          }
+
+          personTotals[personName].itemCount += 1;
+          personTotals[personName].items.push({
+            item: row.Item || row.item,
+            qty,
+            price,
+            totalValue,
+            status,
+            timestamp: row.Timestamp || row.timestamp,
+            sheet: sheetName
+          });
+
+          if (status.includes('owe') || status.includes('debt')) {
+            personTotals[personName].totalOwed += totalValue;
+          } else if (status.includes('paid') || status.includes('complete')) {
+            personTotals[personName].totalPaid += totalValue;
+          } else {
+            personTotals[personName].totalPending += totalValue;
+          }
+        });
+      }
+
+      return personTotals;
+    } catch (error) {
+      console.error('Error calculating person totals:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = GoogleSheetsAPI;
