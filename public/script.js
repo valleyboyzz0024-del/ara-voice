@@ -49,7 +49,10 @@ async function sendMessage() {
     try {
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest' // Tells the server this is an API call
+            },
             body: JSON.stringify({
                 messages: conversationHistory,
                 smartMode: smartModeToggle.checked,
@@ -58,18 +61,21 @@ async function sendMessage() {
 
         chatMessages.removeChild(thinkingIndicator);
 
+        // If the session has expired, the server will send a 401 status.
         if (response.status === 401) {
             alert("Session expired. Please log in again.");
-            window.location.href = "/";
+            window.location.href = "/"; // Redirect to the login page
             return;
         }
+        
+        // This is the line that was causing the error before.
+        // Now it will only run if the response is not an error.
+        const data = await response.json();
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'An unknown error occurred.');
+            throw new Error(data.error || 'An unknown error occurred.');
         }
 
-        const data = await response.json();
         const aiReply = data.reply;
         
         addMessageToUI('ai', aiReply);
@@ -77,6 +83,8 @@ async function sendMessage() {
 
     } catch (error) {
         console.error('Error:', error);
-        addMessageToUI('ai', `Error: ${error.message}`);
+        // This will now catch the "Unexpected token '<'" error gracefully
+        // if it ever happens again.
+        addMessageToUI('ai', `Error: ${error.message}. You may need to log in again.`);
     }
 }

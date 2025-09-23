@@ -13,7 +13,7 @@ const port = process.env.PORT || 10000;
 
 // Middleware
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // For parsing login form data
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Session Configuration
@@ -29,44 +29,48 @@ const isAuthenticated = (req, res, next) => {
     if (req.session.isAuthenticated) {
         return next();
     }
-    res.redirect('/'); // If not logged in, send to login page
+    // For API calls (like from our script.js), send a JSON error.
+    // For browser navigation, redirect to the login page.
+    if (req.headers['x-requested-with'] === 'XMLHttpRequest') {
+        res.status(401).json({ error: 'Session expired. Please log in again.' });
+    } else {
+        res.redirect('/');
+    }
 };
 
 // --- ROUTES ---
 
-// 1. Serve the login page at the root URL
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-// 2. Handle the password submission from the login form
 app.post('/login', (req, res) => {
     const { password } = req.body;
     if (password === process.env.APP_PASSWORD) {
-        req.session.isAuthenticated = true; // Set session cookie
+        req.session.isAuthenticated = true;
         res.redirect('/chat');
     } else {
-        res.redirect('/'); // Failed login
+        res.redirect('/');
     }
 });
 
-// 3. Serve the chat page, but only if authenticated
 app.get('/chat', isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'chat.html'));
 });
 
-// 4. Handle API commands, but only if authenticated
+// The server now knows how to handle unauthorized API calls correctly.
 app.post('/command', isAuthenticated, async (req, res) => {
     try {
-        // We no longer need the password in the body because the session confirms authentication
         const { messages, smartMode } = req.body;
         const reply = await handleCommand(messages, smartMode);
         res.json({ reply });
-    } catch (error) {
+    } catch (error)
+    {
         console.error('Error in /command endpoint:', error);
         res.status(500).json({ error: 'An error occurred on the server.' });
     }
 });
+
 
 app.listen(port, () => {
     console.log(`Ara AI server is running on port ${port}.`);
