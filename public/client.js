@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+<<<<<<< HEAD
     const chatLog = document.getElementById('chat-log');
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
@@ -13,11 +14,49 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Attempting to play audio for text:", text); // New log
         try {
             const response = await fetch('/speak', {
+=======
+    const commandInput = document.getElementById('command-input');
+    const micButton = document.getElementById('mic-button');
+    const chatHistory = document.getElementById('chat-history');
+
+    let mediaRecorder;
+    let audioChunks = [];
+    let isRecording = false;
+
+    // --- Core Functions ---
+
+    /**
+     * Adds a message to the chat history UI.
+     * @param {string} message - The text content of the message.
+     * @param {string} sender - 'user' or 'ai'.
+     */
+    function addMessageToHistory(message, sender) {
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message', `${sender}-message`);
+        messageElement.textContent = message;
+        chatHistory.appendChild(messageElement);
+        chatHistory.scrollTop = chatHistory.scrollHeight; // Auto-scroll to the latest message
+    }
+
+    /**
+     * Sends a text message to the server.
+     * @param {string} text - The text to send.
+     */
+    async function sendTextMessage(text) {
+        if (!text.trim()) return;
+
+        addMessageToHistory(text, 'user');
+        commandInput.value = '';
+
+        try {
+            const response = await fetch('/chat', {
+>>>>>>> 2fb3111eff2ff9d8dde581e7e40e587517e411dd
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: text }),
             });
 
+<<<<<<< HEAD
             console.log("Received response from /speak endpoint. Status:", response.status); // New log
 
             if (!response.ok) {
@@ -126,12 +165,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
         status.textContent = 'Transcribing...';
         status.classList.remove('status-hidden');
+=======
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            addMessageToHistory(result.reply, 'ai');
+
+        } catch (error) {
+            console.error('Error sending text message:', error);
+            addMessageToHistory('Sorry, I had trouble connecting. Please try again.', 'ai');
+        }
+    }
+
+    /**
+     * Sends an audio blob to the server for transcription and processing.
+     * @param {Blob} audioBlob - The recorded audio data.
+     */
+    async function sendAudioMessage(audioBlob) {
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+>>>>>>> 2fb3111eff2ff9d8dde581e7e40e587517e411dd
 
         try {
             const response = await fetch('/voice', {
                 method: 'POST',
                 body: formData,
             });
+<<<<<<< HEAD
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'The server returned an error.');
@@ -165,4 +227,96 @@ document.addEventListener('DOMContentLoaded', () => {
     userInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') handleSend();
     });
+=======
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            // Display the transcribed text and the AI's reply
+            if (result.transcription) {
+                addMessageToHistory(result.transcription, 'user');
+            }
+            if (result.reply) {
+                addMessageToHistory(result.reply, 'ai');
+            }
+
+        } catch (error) {
+            console.error('Error sending audio message:', error);
+            addMessageToHistory('Sorry, I had trouble understanding that. Please try again.', 'ai');
+        }
+    }
+
+
+    // --- Voice Recording Logic ---
+
+    /**
+     * Toggles the microphone recording state.
+     */
+    async function toggleRecording() {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            await startRecording();
+        }
+    }
+
+    /**
+     * Starts the audio recording process.
+     */
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                sendAudioMessage(audioBlob);
+                audioChunks = []; // Reset for the next recording
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            micButton.classList.add('is-recording'); // Visual feedback
+
+        } catch (error) {
+            console.error('Error accessing microphone:', error);
+            addMessageToHistory('Could not access the microphone. Please check permissions.', 'ai');
+        }
+    }
+
+    /**
+     * Stops the audio recording.
+     */
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            isRecording = false;
+            micButton.classList.remove('is-recording');
+        }
+    }
+
+    // --- Event Listeners ---
+
+    // Send message when Enter is pressed in the input field
+    commandInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            sendTextMessage(commandInput.value);
+        }
+    });
+
+    // Toggle recording when the mic button is clicked
+    micButton.addEventListener('click', toggleRecording);
+
+    // Initial greeting
+    addMessageToHistory('Hello! How can I assist you today?', 'ai');
+>>>>>>> 2fb3111eff2ff9d8dde581e7e40e587517e411dd
 });

@@ -6,6 +6,11 @@
 
 # Google Credentials
 google-credentials.json
+manifest-*.json
 
-# Operating System files
-.DS_Store
+# Uploads
+/uploads/
+
+# Logs
+npm-debug.log
+yarn-error.log
