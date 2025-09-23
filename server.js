@@ -11,26 +11,26 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 10000;
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Session Configuration
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'a-very-secret-key-that-should-be-in-env',
+    secret: process.env.SESSION_SECRET, // Using the secret from Render
     resave: false,
     saveUninitialized: true,
-    cookie: { maxAge: 24 * 60 * 60 * 1000 } // Session expires after 24 hours
+    cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
 // Middleware to protect routes
 const isAuthenticated = (req, res, next) => {
+    // --- ADDED LOGGING ---
+    console.log('[AUTH CHECK] Checking session status. IsAuthenticated:', req.session.isAuthenticated);
+    
     if (req.session.isAuthenticated) {
         return next();
     }
-    // For API calls (like from our script.js), send a JSON error.
-    // For browser navigation, redirect to the login page.
+    
     if (req.headers['x-requested-with'] === 'XMLHttpRequest') {
         res.status(401).json({ error: 'Session expired. Please log in again.' });
     } else {
@@ -45,11 +45,18 @@ app.get('/', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
+    // --- ADDED LOGGING ---
+    console.log('[LOGIN ATTEMPT] Received a POST request to /login.');
+    
     const { password } = req.body;
     if (password === process.env.APP_PASSWORD) {
         req.session.isAuthenticated = true;
+        // --- ADDED LOGGING ---
+        console.log('[SESSION SET] Password correct. Session isAuthenticated set to true.');
         res.redirect('/chat');
     } else {
+        // --- ADDED LOGGING ---
+        console.log('[LOGIN FAILED] Incorrect password provided.');
         res.redirect('/');
     }
 });
@@ -58,7 +65,6 @@ app.get('/chat', isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'chat.html'));
 });
 
-// The server now knows how to handle unauthorized API calls correctly.
 app.post('/command', isAuthenticated, async (req, res) => {
     try {
         const { messages, smartMode } = req.body;
@@ -70,7 +76,6 @@ app.post('/command', isAuthenticated, async (req, res) => {
         res.status(500).json({ error: 'An error occurred on the server.' });
     }
 });
-
 
 app.listen(port, () => {
     console.log(`Ara AI server is running on port ${port}.`);
