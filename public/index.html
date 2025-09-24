@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ara Voice AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="chat-container">
+        <div id="chat-header">
+            <h1>ARA</h1>
+            <div class="header-subtitle">VOICE ASSISTANT</div>
+        </div>
+        <div id="chat-messages">
+            <!-- Chat messages will be appended here -->
+        </div>
+        <div id="typing-indicator" class="hidden">
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+        </div>
+        <div id="chat-input-container">
+            <input type="text" id="chat-input" placeholder="Ask me anything about life... or your sheets...">
+            <button id="mic-btn">
+                <i class="fas fa-microphone"></i>
+            </button>
+        </div>
+        <div id="settings-container">
+             <label class="switch">
+                <input type="checkbox" id="smart-mode-toggle">
+                <span class="slider"></span>
+            </label>
+            <label for="smart-mode-toggle" class="setting-label">GPT-4 Smart Mode</label>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
