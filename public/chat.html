@@ -4,25 +4,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ara Voice AI</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#E50914">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
 </head>
 <body>
+    <div id="background-animation"></div>
     <div class="chat-container">
         <header class="chat-header">
-            <h1>Ara AI</h1>
-            <div class="mode-switcher">
-                <label for="smartMode">Smart Mode (GPT-4o)</label>
-                <input type="checkbox" id="smartMode">
-                <div class="slider"></div>
+            <h1>Ara</h1>
+            <div id="ai-status" class="ai-status">Ready</div>
+            <div class="controls-area">
+                <select id="voiceSelector" class="voice-selector"></select>
+                <div class="mode-switcher">
+                    <label for="smartMode">Casual Mode</label>
+                    <input type="checkbox" id="smartMode">
+                    <div class="slider"></div>
+                </div>
             </div>
         </header>
         <div class="chat-messages" id="chat-messages">
-            </div>
+        </div>
         <div class="chat-input-area">
+            <canvas id="mic-visualizer" class="mic-visualizer" width="100" height="30"></canvas>
             <input type="text" id="userInput" placeholder="Ask Ara anything...">
+            <button id="stopButton" class="stop-button" style="display: none;">Stop</button>
+            <button id="micButton" class="mic-button">
+                <img src="/images/character-mic.png" alt="Microphone" class="mic-icon-image">
+            </button>
             <button id="sendButton" class="send-button">Send</button>
         </div>
     </div>

@@ -1,7 +1,7 @@
 {
-  "name": "ara-voice-ai",
+  "name": "ara-voice-ai-ultimate",
   "version": "1.0.0",
-  "description": "A conversational AI assistant for Google Sheets.",
+  "description": "The ultimate conversational AI assistant for Google Sheets.",
   "main": "server.js",
   "type": "module",
   "scripts": {
