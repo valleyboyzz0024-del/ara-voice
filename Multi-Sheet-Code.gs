@@ -1,9 +1,9 @@
 /**
- * Multi-Sheet Google Apps Script for Ara Voice AI
- * Handles multiple Google Sheets for comprehensive data management
+ * Simplified Google Apps Script for Ara Voice AI
+ * Compatible with existing sheet structure and expectations
  */
 
-// Configuration - Add your sheet IDs here
+// Your sheet IDs - UPDATE THESE WITH YOUR ACTUAL SHEET IDS
 const SHEET_IDS = [
   '1CwV3uJ_fgs783230SQXvZs5kRGFFNmeaYRYYTT-yvkQ',
   '1aAb6jKRxisGKVQIex_HU59lX6X-Kkm4tTIH7qXfaEW0', 
@@ -12,7 +12,7 @@ const SHEET_IDS = [
   '1dElu39ly3LNHAMZupg1OzWmAmoDZVMRWXX5x2ksw12Q'
 ];
 
-// Sheet names mapping (customize as needed)
+// Sheet friendly names
 const SHEET_NAMES = {
   '1CwV3uJ_fgs783230SQXvZs5kRGFFNmeaYRYYTT-yvkQ': 'Groceries',
   '1aAb6jKRxisGKVQIex_HU59lX6X-Kkm4tTIH7qXfaEW0': 'Expenses',
@@ -46,25 +46,16 @@ function doPost(e) {
     
     switch (action) {
       case 'getSheetNames':
-        result = getAllSheetNames();
+        result = getSheetNames();
         break;
       case 'addRow':
-        result = addRowToSheet(data);
+        result = addRow(data);
         break;
       case 'readSheet':
-        result = readFromSheet(data);
+        result = readSheet(data);
         break;
-      case 'updateRow':
-        result = updateRowInSheet(data);
-        break;
-      case 'deleteRow':
-        result = deleteRowFromSheet(data);
-        break;
-      case 'searchSheet':
-        result = searchInSheet(data);
-        break;
-      case 'createSheet':
-        result = createNewSheet(data);
+      case 'getSheetData':
+        result = getSheetData(data);
         break;
       default:
         result = {
@@ -86,9 +77,9 @@ function doPost(e) {
 }
 
 /**
- * Get all sheet names from all configured spreadsheets
+ * Get all available sheet names from all spreadsheets
  */
-function getAllSheetNames() {
+function getSheetNames() {
   try {
     const allSheets = [];
     
@@ -99,12 +90,7 @@ function getAllSheetNames() {
         const friendlyName = SHEET_NAMES[sheetId] || `Sheet_${sheetId.substring(0, 8)}`;
         
         sheets.forEach(sheet => {
-          allSheets.push({
-            name: `${friendlyName}_${sheet.getName()}`,
-            sheetId: sheetId,
-            tabName: sheet.getName(),
-            friendlyName: friendlyName
-          });
+          allSheets.push(`${friendlyName}_${sheet.getName()}`);
         });
         
         console.log(`✅ Loaded sheets from ${friendlyName}`);
@@ -113,12 +99,9 @@ function getAllSheetNames() {
       }
     });
     
-    const sheetNames = allSheets.map(s => s.name);
-    
     return {
       status: 'success',
-      sheetNames: sheetNames,
-      sheetDetails: allSheets,
+      sheetNames: allSheets,
       totalSheets: allSheets.length
     };
   } catch (error) {
@@ -131,46 +114,88 @@ function getAllSheetNames() {
 }
 
 /**
- * Add a row to a specific sheet
+ * Add a row to a sheet - Compatible with existing expectations
  */
-function addRowToSheet(data) {
+function addRow(data) {
   try {
-    if (!data.sheetName || !data.data) {
-      return {
-        status: 'error',
-        message: 'Sheet name and data are required'
-      };
+    console.log('📝 Adding row with data:', JSON.stringify(data));
+    
+    // Handle both old and new formats
+    const item = data.item || (data.data && data.data[0]) || 'Unknown Item';
+    const qty = data.qty || (data.data && data.data[1]) || 1;
+    const price = data.pricePerKg || data.price || (data.data && data.data[2]) || 0;
+    const status = data.status || (data.data && data.data[3]) || 'pending';
+    const tabName = data.tabName || data.sheetName || 'Sheet1';
+    
+    console.log(`📊 Parsed: item=${item}, qty=${qty}, price=${price}, status=${status}, tabName=${tabName}`);
+    
+    // Determine which spreadsheet to use based on sheet name
+    let targetSheetId = SHEET_IDS[0]; // Default to first sheet
+    let actualTabName = tabName;
+    
+    // If tabName contains friendly name, extract it
+    if (tabName.includes('_')) {
+      const parts = tabName.split('_');
+      const friendlyName = parts[0];
+      actualTabName = parts.slice(1).join('_');
+      
+      // Find the sheet ID for this friendly name
+      for (const [sheetId, name] of Object.entries(SHEET_NAMES)) {
+        if (name === friendlyName) {
+          targetSheetId = sheetId;
+          break;
+        }
+      }
+    } else {
+      // Determine sheet based on item type
+      const itemLower = item.toLowerCase();
+      if (itemLower.includes('apple') || itemLower.includes('banana') || itemLower.includes('food') || itemLower.includes('grocery')) {
+        targetSheetId = SHEET_IDS[0]; // Groceries
+        actualTabName = 'Sheet1';
+      } else if (itemLower.includes('expense') || itemLower.includes('cost') || itemLower.includes('money')) {
+        targetSheetId = SHEET_IDS[1]; // Expenses
+        actualTabName = 'Sheet1';
+      } else if (itemLower.includes('task') || itemLower.includes('todo')) {
+        targetSheetId = SHEET_IDS[2]; // Tasks
+        actualTabName = 'Sheet1';
+      }
     }
     
-    const sheetInfo = parseSheetName(data.sheetName);
-    if (!sheetInfo) {
-      return {
-        status: 'error',
-        message: `Invalid sheet name: ${data.sheetName}`
-      };
-    }
+    console.log(`🎯 Using sheet ID: ${targetSheetId}, tab: ${actualTabName}`);
     
-    const spreadsheet = SpreadsheetApp.openById(sheetInfo.sheetId);
-    let sheet = spreadsheet.getSheetByName(sheetInfo.tabName);
+    const spreadsheet = SpreadsheetApp.openById(targetSheetId);
+    let sheet = spreadsheet.getSheetByName(actualTabName);
     
-    // Create sheet if it doesn't exist
+    // If sheet doesn't exist, try the first sheet
     if (!sheet) {
-      sheet = spreadsheet.insertSheet(sheetInfo.tabName);
-      console.log(`📝 Created new sheet: ${sheetInfo.tabName}`);
+      const sheets = spreadsheet.getSheets();
+      if (sheets.length > 0) {
+        sheet = sheets[0];
+        actualTabName = sheet.getName();
+        console.log(`📋 Using first available sheet: ${actualTabName}`);
+      } else {
+        throw new Error('No sheets found in spreadsheet');
+      }
     }
     
-    // Add timestamp if not provided
-    const rowData = Array.isArray(data.data) ? data.data : [data.data];
-    rowData.push(new Date().toLocaleString());
+    // Add the row with timestamp
+    const timestamp = new Date().toLocaleString();
+    const rowData = [item, qty, price, status, timestamp];
     
     sheet.appendRow(rowData);
     
     return {
       status: 'success',
-      message: `Added row to ${data.sheetName}`,
-      data: rowData,
-      sheetId: sheetInfo.sheetId,
-      tabName: sheetInfo.tabName
+      message: `Added "${item}" to ${SHEET_NAMES[targetSheetId] || 'sheet'} successfully`,
+      data: {
+        item: item,
+        qty: qty,
+        price: price,
+        status: status,
+        timestamp: timestamp,
+        sheetId: targetSheetId,
+        tabName: actualTabName
+      }
     };
   } catch (error) {
     console.error('❌ Error adding row:', error);
@@ -182,33 +207,41 @@ function addRowToSheet(data) {
 }
 
 /**
- * Read data from a specific sheet
+ * Read data from a sheet
  */
-function readFromSheet(data) {
+function readSheet(data) {
   try {
-    if (!data.sheetName) {
-      return {
-        status: 'error',
-        message: 'Sheet name is required'
-      };
+    const sheetName = data.sheetName || data.tabName || 'Sheet1';
+    console.log('📖 Reading from sheet:', sheetName);
+    
+    // Determine which spreadsheet to use
+    let targetSheetId = SHEET_IDS[0];
+    let actualTabName = sheetName;
+    
+    if (sheetName.includes('_')) {
+      const parts = sheetName.split('_');
+      const friendlyName = parts[0];
+      actualTabName = parts.slice(1).join('_');
+      
+      for (const [sheetId, name] of Object.entries(SHEET_NAMES)) {
+        if (name === friendlyName) {
+          targetSheetId = sheetId;
+          break;
+        }
+      }
     }
     
-    const sheetInfo = parseSheetName(data.sheetName);
-    if (!sheetInfo) {
-      return {
-        status: 'error',
-        message: `Invalid sheet name: ${data.sheetName}`
-      };
-    }
-    
-    const spreadsheet = SpreadsheetApp.openById(sheetInfo.sheetId);
-    const sheet = spreadsheet.getSheetByName(sheetInfo.tabName);
+    const spreadsheet = SpreadsheetApp.openById(targetSheetId);
+    let sheet = spreadsheet.getSheetByName(actualTabName);
     
     if (!sheet) {
-      return {
-        status: 'error',
-        message: `Sheet not found: ${data.sheetName}`
-      };
+      const sheets = spreadsheet.getSheets();
+      if (sheets.length > 0) {
+        sheet = sheets[0];
+        actualTabName = sheet.getName();
+      } else {
+        throw new Error('No sheets found');
+      }
     }
     
     const values = sheet.getDataRange().getValues();
@@ -237,11 +270,11 @@ function readFromSheet(data) {
     
     return {
       status: 'success',
-      message: `Read ${jsonData.length} rows from ${data.sheetName}`,
+      message: `Read ${jsonData.length} rows from ${SHEET_NAMES[targetSheetId] || 'sheet'}`,
       headers: headers,
       data: jsonData,
-      sheetId: sheetInfo.sheetId,
-      tabName: sheetInfo.tabName
+      sheetId: targetSheetId,
+      tabName: actualTabName
     };
   } catch (error) {
     console.error('❌ Error reading sheet:', error);
@@ -253,230 +286,10 @@ function readFromSheet(data) {
 }
 
 /**
- * Search for data in sheets
+ * Get sheet data (alias for readSheet for compatibility)
  */
-function searchInSheet(data) {
-  try {
-    const { query, sheetName } = data;
-    if (!query) {
-      return {
-        status: 'error',
-        message: 'Search query is required'
-      };
-    }
-    
-    const results = [];
-    const sheetsToSearch = sheetName ? [sheetName] : getAllSheetNames().sheetNames;
-    
-    sheetsToSearch.forEach(name => {
-      try {
-        const readResult = readFromSheet({ sheetName: name });
-        if (readResult.status === 'success' && readResult.data) {
-          const matches = readResult.data.filter(row => {
-            return Object.values(row).some(value => 
-              String(value).toLowerCase().includes(query.toLowerCase())
-            );
-          });
-          
-          if (matches.length > 0) {
-            results.push({
-              sheetName: name,
-              matches: matches,
-              count: matches.length
-            });
-          }
-        }
-      } catch (searchError) {
-        console.error(`❌ Error searching in ${name}:`, searchError);
-      }
-    });
-    
-    return {
-      status: 'success',
-      message: `Found ${results.reduce((sum, r) => sum + r.count, 0)} matches`,
-      results: results,
-      query: query
-    };
-  } catch (error) {
-    console.error('❌ Error searching:', error);
-    return {
-      status: 'error',
-      message: `Search failed: ${error.toString()}`
-    };
-  }
-}
-
-/**
- * Update a row in a sheet
- */
-function updateRowInSheet(data) {
-  try {
-    const { sheetName, rowIndex, data: newData } = data;
-    if (!sheetName || !rowIndex || !newData) {
-      return {
-        status: 'error',
-        message: 'Sheet name, row index, and data are required'
-      };
-    }
-    
-    const sheetInfo = parseSheetName(sheetName);
-    if (!sheetInfo) {
-      return {
-        status: 'error',
-        message: `Invalid sheet name: ${sheetName}`
-      };
-    }
-    
-    const spreadsheet = SpreadsheetApp.openById(sheetInfo.sheetId);
-    const sheet = spreadsheet.getSheetByName(sheetInfo.tabName);
-    
-    if (!sheet) {
-      return {
-        status: 'error',
-        message: `Sheet not found: ${sheetName}`
-      };
-    }
-    
-    const range = sheet.getRange(parseInt(rowIndex), 1, 1, newData.length);
-    range.setValues([newData]);
-    
-    return {
-      status: 'success',
-      message: `Updated row ${rowIndex} in ${sheetName}`,
-      rowIndex: rowIndex,
-      data: newData
-    };
-  } catch (error) {
-    console.error('❌ Error updating row:', error);
-    return {
-      status: 'error',
-      message: `Failed to update row: ${error.toString()}`
-    };
-  }
-}
-
-/**
- * Delete a row from a sheet
- */
-function deleteRowFromSheet(data) {
-  try {
-    const { sheetName, rowIndex } = data;
-    if (!sheetName || !rowIndex) {
-      return {
-        status: 'error',
-        message: 'Sheet name and row index are required'
-      };
-    }
-    
-    const sheetInfo = parseSheetName(sheetName);
-    if (!sheetInfo) {
-      return {
-        status: 'error',
-        message: `Invalid sheet name: ${sheetName}`
-      };
-    }
-    
-    const spreadsheet = SpreadsheetApp.openById(sheetInfo.sheetId);
-    const sheet = spreadsheet.getSheetByName(sheetInfo.tabName);
-    
-    if (!sheet) {
-      return {
-        status: 'error',
-        message: `Sheet not found: ${sheetName}`
-      };
-    }
-    
-    sheet.deleteRow(parseInt(rowIndex));
-    
-    return {
-      status: 'success',
-      message: `Deleted row ${rowIndex} from ${sheetName}`,
-      rowIndex: rowIndex
-    };
-  } catch (error) {
-    console.error('❌ Error deleting row:', error);
-    return {
-      status: 'error',
-      message: `Failed to delete row: ${error.toString()}`
-    };
-  }
-}
-
-/**
- * Create a new sheet
- */
-function createNewSheet(data) {
-  try {
-    const { sheetName, headers, sheetId } = data;
-    if (!sheetName) {
-      return {
-        status: 'error',
-        message: 'Sheet name is required'
-      };
-    }
-    
-    const targetSheetId = sheetId || SHEET_IDS[0]; // Use first sheet as default
-    const spreadsheet = SpreadsheetApp.openById(targetSheetId);
-    
-    let sheet;
-    try {
-      sheet = spreadsheet.getSheetByName(sheetName);
-    } catch (e) {
-      // Sheet doesn't exist
-    }
-    
-    if (sheet) {
-      return {
-        status: 'success',
-        message: `Sheet already exists: ${sheetName}`
-      };
-    }
-    
-    sheet = spreadsheet.insertSheet(sheetName);
-    
-    if (headers && Array.isArray(headers)) {
-      sheet.appendRow(headers);
-    }
-    
-    return {
-      status: 'success',
-      message: `Created new sheet: ${sheetName}`,
-      sheetId: targetSheetId,
-      sheetName: sheetName
-    };
-  } catch (error) {
-    console.error('❌ Error creating sheet:', error);
-    return {
-      status: 'error',
-      message: `Failed to create sheet: ${error.toString()}`
-    };
-  }
-}
-
-/**
- * Parse sheet name to extract sheet ID and tab name
- */
-function parseSheetName(sheetName) {
-  // Handle different formats: "FriendlyName_TabName" or just "TabName"
-  const parts = sheetName.split('_');
-  
-  if (parts.length >= 2) {
-    const friendlyName = parts[0];
-    const tabName = parts.slice(1).join('_');
-    
-    // Find sheet ID by friendly name
-    for (const [sheetId, name] of Object.entries(SHEET_NAMES)) {
-      if (name === friendlyName) {
-        return { sheetId, tabName };
-      }
-    }
-  }
-  
-  // Fallback: use first sheet and treat as tab name
-  return {
-    sheetId: SHEET_IDS[0],
-    tabName: sheetName
-  };
+function getSheetData(data) {
+  return readSheet(data);
 }
 
 /**
@@ -495,16 +308,8 @@ function doGet() {
   return createResponse({
     status: 'success',
     message: 'Ara Voice AI Multi-Sheet API is running',
-    version: '2.0.0',
+    version: '3.0.0',
     connectedSheets: SHEET_IDS.length,
-    availableActions: [
-      'getSheetNames',
-      'addRow', 
-      'readSheet',
-      'updateRow',
-      'deleteRow',
-      'searchSheet',
-      'createSheet'
-    ]
+    availableActions: ['getSheetNames', 'addRow', 'readSheet', 'getSheetData']
   });
 }

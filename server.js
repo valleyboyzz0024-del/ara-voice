@@ -537,13 +537,20 @@ async function handleWriteCommand(command, availableSheetsString, sheetsConnecte
         }
     }
 
-    const writePrompt = `You are a data parsing AI for Google Sheets. Parse the user's command into a JSON object for Google Apps Script. Available sheets: [${availableSheetsString}].
+    const writePrompt = `You are a data parsing AI for Google Sheets. Parse the user's command into a JSON object for Google Apps Script.
 
 Rules:
-1. Choose the most appropriate sheet name from the available sheets
-2. Create a JSON object with: "action": "addRow", "sheetName": "chosen_sheet", "data": [array of values]
-3. Extract meaningful data from the command
-4. Add relevant fields like item, quantity, date, status, etc.
+1. Create a JSON object with these exact fields:
+   - "action": "addRow"
+   - "item": the main item/thing being added
+   - "qty": quantity as a number (default 1)
+   - "pricePerKg": price as a number (default 0)
+   - "status": "pending", "purchased", "completed", etc.
+   - "tabName": "Sheet1" (always use Sheet1)
+
+2. Extract meaningful data from the command
+3. If user says "bought" or "purchased", set status to "purchased"
+4. Extract numbers for quantity and price
 
 User command: "${command}"`;
     
@@ -581,37 +588,38 @@ User command: "${command}"`;
 
 function parseMockWriteCommand(command, availableSheetsString) {
     const lowerCommand = command.toLowerCase();
-    let sheetName = 'Groceries'; // default
-    let data = [];
-    
-    // Determine sheet based on keywords
-    if (lowerCommand.includes('grocery') || lowerCommand.includes('food') || lowerCommand.includes('apple') || lowerCommand.includes('banana')) {
-        sheetName = 'Groceries';
-    } else if (lowerCommand.includes('expense') || lowerCommand.includes('cost') || lowerCommand.includes('money') || lowerCommand.includes('budget')) {
-        sheetName = 'Expenses';
-    } else if (lowerCommand.includes('task') || lowerCommand.includes('todo') || lowerCommand.includes('reminder')) {
-        sheetName = 'Tasks';
-    } else if (lowerCommand.includes('shop') || lowerCommand.includes('buy')) {
-        sheetName = 'Shopping';
-    }
     
     // Extract data from command
     const words = command.split(' ');
     const numbers = words.filter(word => !isNaN(word) && word !== '');
-    const quantity = numbers.length > 0 ? numbers[0] : '1';
+    const quantity = numbers.length > 0 ? parseInt(numbers[0]) : 1;
     
     // Simple item extraction
-    let item = command.replace(/add|create|insert|to|my|the|a|an/gi, '').trim();
+    let item = command.replace(/add|create|insert|to|my|the|a|an|bought|buy/gi, '').trim();
     if (item.includes('to ')) {
         item = item.split('to ')[0].trim();
     }
     
-    data = [item || 'Item from: ' + command, quantity, new Date().toLocaleDateString(), 'pending'];
+    // Extract price if mentioned
+    let price = 0;
+    const priceMatch = command.match(/\$(\d+(?:\.\d{2})?)/);
+    if (priceMatch) {
+        price = parseFloat(priceMatch[1]);
+    }
+    
+    // Determine status
+    let status = 'pending';
+    if (lowerCommand.includes('bought') || lowerCommand.includes('purchased')) {
+        status = 'purchased';
+    }
     
     return {
         action: "addRow",
-        sheetName: sheetName,
-        data: data
+        item: item || 'Item from command',
+        qty: quantity,
+        pricePerKg: price,
+        status: status,
+        tabName: "Sheet1"
     };
 }
 
