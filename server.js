@@ -16,7 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(session({
-    secret: process.env.SESSION_SECRET, // Using the secret from Render
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
@@ -24,10 +24,10 @@ app.use(session({
 
 // Middleware to protect routes
 const isAuthenticated = (req, res, next) => {
-    // --- ADDED LOGGING ---
-    console.log('[AUTH CHECK] Checking session status. IsAuthenticated:', req.session.isAuthenticated);
-    
-    if (req.session.isAuthenticated) {
+    // --- THIS IS THE FIX ---
+    // We now strictly check if the value is true.
+    // If it's undefined or false, the user will be redirected.
+    if (req.session.isAuthenticated === true) {
         return next();
     }
     
@@ -45,18 +45,11 @@ app.get('/', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-    // --- ADDED LOGGING ---
-    console.log('[LOGIN ATTEMPT] Received a POST request to /login.');
-    
     const { password } = req.body;
     if (password === process.env.APP_PASSWORD) {
         req.session.isAuthenticated = true;
-        // --- ADDED LOGGING ---
-        console.log('[SESSION SET] Password correct. Session isAuthenticated set to true.');
         res.redirect('/chat');
     } else {
-        // --- ADDED LOGGING ---
-        console.log('[LOGIN FAILED] Incorrect password provided.');
         res.redirect('/');
     }
 });
