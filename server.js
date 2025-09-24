@@ -527,13 +527,13 @@ async function handleWriteCommand(command, availableSheetsString, sheetsConnecte
                     timeout: 25000
                 });
                 console.log('📥 Write result:', writeResult.data);
-                return `✅ Successfully added to ${mockData.sheetName}: ${mockData.data.join(', ')}`;
+                return `✅ Successfully added "${mockData.item}" to the sheet!`;
             } catch (error) {
                 console.error('❌ Error writing to Multi-Sheet system:', error.message);
-                return `📝 Processed write command: "${command}" for ${mockData.sheetName}. Error: ${error.message}`;
+                return `📝 Processed write command: "${command}" for item "${mockData.item}". Error: ${error.message}`;
             }
         } else {
-            return `📝 Mock: Would add to ${mockData.sheetName}: ${mockData.data.join(', ')}. Connect Google Apps Script for real updates.`;
+            return `📝 Mock: Would add "${mockData.item}" (quantity: ${mockData.qty}) to the sheet. Connect Google Apps Script for real updates.`;
         }
     }
 
