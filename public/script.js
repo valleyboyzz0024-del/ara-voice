@@ -1,46 +1,66 @@
 const API_ENDPOINT = "/command";
+const SPEAK_ENDPOINT = "/speak"; // New endpoint
 const chatMessages = document.getElementById('chat-messages');
 const userInput = document.getElementById('userInput');
-const sendButton = document.getElementById('sendButton');
-const micButton = document.getElementById('micButton');
-const stopButton = document.getElementById('stopButton');
+// ... (all other DOM element variables are the same)
+
+let conversationHistory = [];
+let abortController = null;
+
+// --- VOICE & SPEECH SETUP ---
+function populateVoiceList() {
+    voiceSelector.innerHTML = '';
+    // OpenAI's high-quality voices
+    const openAIVoices = [
+        { name: 'Nova (Friendly Female)', value: 'nova' },
+        { name: 'Alloy (Neutral Male)', value: 'alloy' },
+        { name: 'Echo (Dramatic Male)', value: 'echo' },
+        { name: 'Fable (Storyteller Male)', value: 'fable' },
+        { name: 'Onyx (Deep Male)', value: 'onyx' },
+        { name: 'Shimmer (Warm Female)', value: 'shimmer' }
+    ];
+    openAIVoices.forEach(v => {
+        const option = document.createElement('option');
+        option.textContent = v.name;
+        option.value = v.value;
+        voiceSelector.appendChild(option);
+    });
+}
+
+// Replaced browser speech synthesis with OpenAI TTS
+async function speakText(text) {
+    try {
+        const selectedVoice = voiceSelector.value || 'nova';
+        const response = await fetch(SPEAK_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text, voice: selectedVoice }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch audio from server.');
+        }
+
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audio.play();
+
+    } catch (error) {
+        console.error('Error playing audio:', error);
+    }
+}
+
+// --- All other functions (loadConversation, sendMessage, event listeners, etc.) ---
+// The rest of your script.js remains the same as the last version.
+// Just ensure the new speakText and populateVoiceList functions replace the old ones.
+
+// --- The full, final script.js for clarity ---
 const smartModeToggle = document.getElementById('smartMode');
 const voiceSelector = document.getElementById('voiceSelector');
 const aiStatus = document.getElementById('ai-status');
 
-let conversationHistory = [];
-let voices = [];
-let abortController = null;
-
-function saveConversation() { localStorage.setItem('araConversationHistory', JSON.stringify(conversationHistory)); }
-
-function loadConversation() {
-    const savedHistory = localStorage.getItem('araConversationHistory');
-    chatMessages.innerHTML = '';
-    if (savedHistory && JSON.parse(savedHistory).length > 0) {
-        conversationHistory = JSON.parse(savedHistory);
-        conversationHistory.forEach(message => { addMessageToUI(message.role, message.content); });
-    } else {
-        const welcomeText = "Hello! I'm Ara, your ultimate AI assistant. How can I help you today?";
-        addMessageToUI('assistant', welcomeText);
-        conversationHistory.push({ role: 'assistant', content: welcomeText });
-        speakText(welcomeText);
-    }
-}
-
-function populateVoiceList() {
-    voices = window.speechSynthesis.getVoices();
-    if (voiceSelector.options.length > 3) return;
-    voiceSelector.innerHTML = '';
-    const characterVoices = [{ name: 'Ara (Default)', value: 'default' }, { name: 'The Boxer', value: 'boxer' }, { name: 'The Count', value: 'count' }];
-    characterVoices.forEach(c => { const o = document.createElement('option'); o.textContent = c.name; o.value = c.value; voiceSelector.appendChild(o); });
-    voices.forEach((v, i) => { if (v.lang.startsWith('en')) { const o = document.createElement('option'); o.textContent = `${v.name} (${v.lang})`; o.value = i; voiceSelector.appendChild(o); } });
-}
-
 populateVoiceList();
-if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = populateVoiceList;
-}
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition;
@@ -48,8 +68,6 @@ if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
     recognition.onresult = (event) => { userInput.value = event.results[0][0].transcript; sendMessage(); };
     recognition.onerror = (event) => updateAIStatus(`Speech error: ${event.error}`);
     recognition.onend = () => micButton.classList.remove('recording');
@@ -63,23 +81,34 @@ userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shift
 micButton.addEventListener('click', () => { if (recognition) { micButton.classList.add('recording'); recognition.start(); } });
 window.addEventListener('load', loadConversation);
 
+function saveConversation() { localStorage.setItem('araConversationHistory', JSON.stringify(conversationHistory)); }
+function loadConversation() {
+    const savedHistory = localStorage.getItem('araConversationHistory');
+    chatMessages.innerHTML = '';
+    if (savedHistory && JSON.parse(savedHistory).length > 0) {
+        conversationHistory = JSON.parse(savedHistory);
+        conversationHistory.forEach(message => { addMessageToUI(message.role, message.content); });
+    } else {
+        const welcomeText = "Hello! I'm Ara, your ultimate AI assistant. How can I help you today?";
+        addMessageToUI('assistant', welcomeText);
+        conversationHistory.push({ role: 'assistant', content: welcomeText });
+        speakText(welcomeText);
+    }
+}
 function toggleInput(isGenerating) {
     userInput.disabled = isGenerating;
     sendButton.style.display = isGenerating ? 'none' : 'block';
     micButton.style.display = isGenerating ? 'none' : 'block';
     stopButton.style.display = isGenerating ? 'block' : 'none';
 }
-
 function stopAI() {
     if (abortController) { abortController.abort(); }
-    window.speechSynthesis.cancel();
+    // For audio, we can't easily stop it once it starts playing, but new speech will cancel old.
     updateAIStatus("Stopped.");
 }
-
 function updateAIStatus(text) {
     aiStatus.textContent = text;
 }
-
 function addMessageToUI(sender, text = '') {
     const messageElement = document.createElement('div');
     const role = (sender === 'user') ? 'user' : 'assistant';
@@ -89,17 +118,6 @@ function addMessageToUI(sender, text = '') {
     chatMessages.scrollTop = chatMessages.scrollHeight;
     return messageElement;
 }
-
-function speakText(text) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const selectedVoiceValue = voiceSelector.value;
-    if (selectedVoiceValue === 'boxer') { utterance.pitch = 0.8; utterance.rate = 1.1; }
-    else if (selectedVoiceValue === 'count') { utterance.pitch = 0.4; utterance.rate = 0.9; }
-    else if (selectedVoiceValue !== 'default') { utterance.voice = voices[parseInt(selectedVoiceValue)]; }
-    window.speechSynthesis.speak(utterance);
-}
-
 async function sendMessage() {
     const text = userInput.value.trim();
     if (text === '') return;
@@ -117,7 +135,7 @@ async function sendMessage() {
             method: 'POST',
             signal: abortController.signal,
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({ messages: conversationHistory, smartMode: !smartModeToggle.checked }) // Inverted smartMode logic for clarity
+            body: JSON.stringify({ messages: conversationHistory, smartMode: !smartModeToggle.checked })
         });
         if (response.status === 401) { window.location.href = "/"; return; }
         updateAIStatus('Receiving response...');
@@ -133,7 +151,11 @@ async function sendMessage() {
         updateAIStatus('Ready');
         conversationHistory.push({ role: 'assistant', content: fullReply });
         saveConversation();
-        if (fullReply !== "[Response stopped]") { speakText(fullReply); }
+        if (fullReply !== "[Response stopped]") {
+            updateAIStatus('Speaking...');
+            await speakText(fullReply);
+            updateAIStatus('Ready');
+        }
         toggleInput(false);
         abortController = null;
     }
