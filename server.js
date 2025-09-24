@@ -71,22 +71,33 @@ app.post('/voice-command', async (req, res) => {
         console.log('Processing command:', userCommand);
 
         // --- Step 1 - Get all available sheet names from Google Sheets ---
-        let availableSheets = ['Groceries', 'Expenses', 'Tasks']; // Default sheets
+        let availableSheets = ['Groceries', 'Expenses', 'Tasks', 'Shopping List']; // Default sheets
         let availableSheetsString = availableSheets.join(', ');
+        let sheetsConnected = false;
 
-        try {
-            const sheetsResponse = await axios.post(config.googleAppsScriptUrl, { action: 'getSheetNames' }, {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 10000
-            });
-            const responseData = sheetsResponse.data;
+        if (config.googleAppsScriptUrl && !config.googleAppsScriptUrl.includes('placeholder') && !config.googleAppsScriptUrl.includes('mock')) {
+            try {
+                console.log('🔗 Attempting to connect to Google Sheets...');
+                const sheetsResponse = await axios.post(config.googleAppsScriptUrl, { action: 'getSheetNames' }, {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 15000
+                });
+                const responseData = sheetsResponse.data;
 
-            if (responseData.status === 'success' && responseData.sheetNames) {
-                availableSheets = responseData.sheetNames;
-                availableSheetsString = availableSheets.join(', ');
+                if (responseData.status === 'success' && responseData.sheetNames) {
+                    availableSheets = responseData.sheetNames;
+                    availableSheetsString = availableSheets.join(', ');
+                    sheetsConnected = true;
+                    console.log('✅ Connected to Google Sheets. Available sheets:', availableSheetsString);
+                } else {
+                    console.log('⚠️ Google Sheets responded but no sheet names found');
+                }
+            } catch (sheetsError) {
+                console.log('❌ Could not connect to Google Sheets:', sheetsError.message);
+                console.log('📋 Using default sheets for demo purposes');
             }
-        } catch (sheetsError) {
-            console.log('Could not connect to Google Sheets, using default sheets');
+        } else {
+            console.log('📋 Google Apps Script URL not configured, using mock mode');
         }
 
         // --- Step 2: Determine User Intent (Read vs. Write) ---
@@ -104,20 +115,9 @@ app.post('/voice-command', async (req, res) => {
         // --- Step 3: Execute based on intent ---
         let answer;
         if (intent === 'WRITE') {
-            answer = await handleWriteCommand(userCommand, availableSheetsString);
-            try {
-                const writeCommand = JSON.parse(answer);
-                console.log('Write command to send:', writeCommand);
-                const writeResult = await axios.post(config.googleAppsScriptUrl, writeCommand, {
-                    headers: { 'Content-Type': 'application/json' },
-                    timeout: 10000
-                });
-                answer = writeResult.data.message || 'Write action completed.';
-            } catch (writeError) {
-                answer = `Processed write command: ${userCommand}. Note: Google Sheets integration not fully configured.`;
-            }
+            answer = await handleWriteCommand(userCommand, availableSheetsString, sheetsConnected);
         } else if (intent === 'READ') {
-            answer = await handleReadCommand(userCommand, availableSheetsString);
+            answer = await handleReadCommand(userCommand, availableSheetsString, sheetsConnected);
         } else {
             answer = `I understand you want to: ${userCommand}. However, I couldn't determine if this is a read or write operation. Could you be more specific?`;
         }
@@ -130,13 +130,22 @@ app.post('/voice-command', async (req, res) => {
     }
 });
 
-async function handleWriteCommand(command, availableSheetsString) {
-    if (!openai) {
-        return JSON.stringify({
-            action: "addRow",
-            sheetName: "Groceries",
-            data: ["Mock Item", "1", "100", "pending"]
-        });
+async function handleWriteCommand(command, availableSheetsString, sheetsConnected) {
+    if (!openai || config.useMockAI) {
+        const mockData = parseMockWriteCommand(command, availableSheetsString);
+        if (sheetsConnected) {
+            try {
+                const writeResult = await axios.post(config.googleAppsScriptUrl, mockData, {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 15000
+                });
+                return `✅ Successfully added to ${mockData.sheetName}: ${mockData.data.join(', ')}`;
+            } catch (error) {
+                return `📝 Processed write command: "${command}" for ${mockData.sheetName}. Error connecting to sheets: ${error.message}`;
+            }
+        } else {
+            return `📝 Mock: Would add to ${mockData.sheetName}: ${mockData.data.join(', ')}. Set up Google Apps Script to enable real sheet updates.`;
+        }
     }
 
     const writePrompt = `You are a data parsing AI for Google Sheets. The user wants to add data. Your job is to identify the correct sheet and parse the data. The available sheets are: [${availableSheetsString}].
@@ -154,35 +163,154 @@ async function handleWriteCommand(command, availableSheetsString) {
             response_format: { type: "json_object" },
         });
         
-        return response.choices[0].message.content;
+        const writeCommand = JSON.parse(response.choices[0].message.content);
+        console.log('📤 Write command to send:', writeCommand);
+        
+        if (sheetsConnected) {
+            const writeResult = await axios.post(config.googleAppsScriptUrl, writeCommand, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 15000
+            });
+            return writeResult.data.message || `✅ Successfully added to ${writeCommand.sheetName}`;
+        } else {
+            return `📝 Parsed command for ${writeCommand.sheetName}: ${writeCommand.data.join(', ')}. Google Sheets not connected - set up your Apps Script URL.`;
+        }
     } catch (error) {
-        return JSON.stringify({
-            action: "addRow",
-            sheetName: "Groceries",
-            data: ["Parsed from: " + command, "1", "0", "pending"]
-        });
+        console.error('Error in handleWriteCommand:', error);
+        return `I understand you want to add something, but I had trouble processing: "${command}". Please try rephrasing your request.`;
     }
 }
 
-async function handleReadCommand(command, availableSheetsString) {
-    if (!openai) {
-        return `Mock response for: "${command}". Available sheets: ${availableSheetsString}. Real AI responses require OpenAI API key.`;
+function parseMockWriteCommand(command, availableSheetsString) {
+    const lowerCommand = command.toLowerCase();
+    let sheetName = 'Groceries'; // default
+    let data = [];
+    
+    // Determine sheet based on keywords
+    if (lowerCommand.includes('grocery') || lowerCommand.includes('food') || lowerCommand.includes('apple') || lowerCommand.includes('banana')) {
+        sheetName = 'Groceries';
+    } else if (lowerCommand.includes('expense') || lowerCommand.includes('cost') || lowerCommand.includes('money') || lowerCommand.includes('budget')) {
+        sheetName = 'Expenses';
+    } else if (lowerCommand.includes('task') || lowerCommand.includes('todo') || lowerCommand.includes('reminder')) {
+        sheetName = 'Tasks';
+    } else if (lowerCommand.includes('shop') || lowerCommand.includes('buy')) {
+        sheetName = 'Shopping List';
+    }
+    
+    // Extract data from command
+    const words = command.split(' ');
+    const numbers = words.filter(word => !isNaN(word) && word !== '');
+    const quantity = numbers.length > 0 ? numbers[0] : '1';
+    
+    // Simple item extraction
+    let item = command.replace(/add|create|insert|to|my|the|a|an/gi, '').trim();
+    if (item.includes('to ')) {
+        item = item.split('to ')[0].trim();
+    }
+    
+    data = [item || 'Item from: ' + command, quantity, new Date().toLocaleDateString(), 'pending'];
+    
+    return {
+        action: "addRow",
+        sheetName: sheetName,
+        data: data
+    };
+}
+
+async function handleReadCommand(command, availableSheetsString, sheetsConnected) {
+    if (!openai || config.useMockAI) {
+        if (sheetsConnected) {
+            try {
+                // Try to read from the most relevant sheet
+                const sheetName = determineRelevantSheet(command, availableSheetsString.split(', '));
+                const readResult = await axios.post(config.googleAppsScriptUrl, { 
+                    action: 'readSheet', 
+                    sheetName: sheetName 
+                }, {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 15000
+                });
+                
+                if (readResult.data.status === 'success') {
+                    const data = readResult.data.data || [];
+                    if (data.length === 0) {
+                        return `📋 The ${sheetName} sheet is currently empty. Try adding some items first!`;
+                    } else {
+                        return `📊 Here's what I found in ${sheetName}:\n\n${formatSheetData(data, readResult.data.headers)}`;
+                    }
+                } else {
+                    return `📋 I tried to read from ${sheetName} but encountered an issue: ${readResult.data.message}`;
+                }
+            } catch (error) {
+                return `📋 Mock response for: "${command}". Available sheets: ${availableSheetsString}. Error reading sheets: ${error.message}`;
+            }
+        } else {
+            return `📋 Mock response for: "${command}". Available sheets: ${availableSheetsString}. Connect Google Sheets to see real data!`;
+        }
     }
 
     try {
+        let systemPrompt = `You are a helpful assistant that can read Google Sheets data. The available sheets are: ${availableSheetsString}.`;
+        
+        if (sheetsConnected) {
+            systemPrompt += ` You can access real sheet data. Provide helpful responses about the user's query.`;
+        } else {
+            systemPrompt += ` Google Sheets is not connected, so provide helpful mock responses and suggest setting up the connection.`;
+        }
+        
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
-                { role: "system", content: `You are a helpful assistant that can read Google Sheets data. The available sheets are: ${availableSheetsString}. Provide a helpful response about the user's query.` },
+                { role: "system", content: systemPrompt },
                 { role: "user", content: command }
             ],
-            max_tokens: 150,
+            max_tokens: 200,
         });
         
         return response.choices[0].message.content;
     } catch (error) {
-        return `I understand you want to know about: "${command}". The available sheets are ${availableSheetsString}. However, I need a valid OpenAI API key to provide detailed responses.`;
+        return `I understand you want to know about: "${command}". The available sheets are ${availableSheetsString}. However, I encountered an error processing your request.`;
     }
+}
+
+function determineRelevantSheet(command, availableSheets) {
+    const lowerCommand = command.toLowerCase();
+    
+    for (const sheet of availableSheets) {
+        if (lowerCommand.includes(sheet.toLowerCase())) {
+            return sheet;
+        }
+    }
+    
+    // Default logic based on keywords
+    if (lowerCommand.includes('grocery') || lowerCommand.includes('food')) return 'Groceries';
+    if (lowerCommand.includes('expense') || lowerCommand.includes('cost') || lowerCommand.includes('money')) return 'Expenses';
+    if (lowerCommand.includes('task') || lowerCommand.includes('todo')) return 'Tasks';
+    if (lowerCommand.includes('shop')) return 'Shopping List';
+    
+    return availableSheets[0] || 'Groceries';
+}
+
+function formatSheetData(data, headers) {
+    if (!data || data.length === 0) return 'No data found.';
+    
+    let formatted = '';
+    data.slice(0, 5).forEach((row, index) => {
+        formatted += `${index + 1}. `;
+        if (headers && headers.length > 0) {
+            formatted += `${row[headers[0]] || row[0] || 'Item'}`;
+            if (row[headers[1]] || row[1]) formatted += ` (${row[headers[1]] || row[1]})`;
+        } else {
+            formatted += row.join(' - ');
+        }
+        formatted += '\n';
+    });
+    
+    if (data.length > 5) {
+        formatted += `... and ${data.length - 5} more items.`;
+    }
+    
+    return formatted;
 }
 
 // --- Serve the main page ---

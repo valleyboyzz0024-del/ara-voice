@@ -3,42 +3,726 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ara Voice AI</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
+    <title>Ara Voice AI Assistant</title>
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2d5a3d">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Ara Voice AI">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+    
+    <!-- Fonts and Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .app-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            min-height: 600px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2d5a3d 0%, #4a7c59 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('icon-192.png') center/60px no-repeat;
+            opacity: 0.1;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header .subtitle {
+            font-size: 0.9em;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 12px;
+            height: 12px;
+            background: #4CAF50;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .chat-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 15px 20px;
+            border-radius: 20px;
+            font-size: 0.95em;
+            line-height: 1.4;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.assistant {
+            background: #f1f3f4;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 5px;
+            border-left: 4px solid #2d5a3d;
+        }
+
+        .typing-indicator {
+            display: none;
+            align-self: flex-start;
+            padding: 15px 20px;
+            background: #f1f3f4;
+            border-radius: 20px;
+            border-bottom-left-radius: 5px;
+        }
+
+        .typing-indicator.show {
+            display: block;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dots span {
+            width: 8px;
+            height: 8px;
+            background: #666;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #eee;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 25px;
+            padding: 5px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .input-container:focus-within {
+            border-color: #2d5a3d;
+            box-shadow: 0 0 0 3px rgba(45, 90, 61, 0.1);
+        }
+
+        #chat-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 15px 20px;
+            font-size: 16px;
+            outline: none;
+            font-family: inherit;
+        }
+
+        #chat-input::placeholder {
+            color: #999;
+        }
+
+        .btn {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        #mic-btn {
+            background: linear-gradient(135deg, #2d5a3d 0%, #4a7c59 100%);
+            color: white;
+        }
+
+        #mic-btn.recording {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            animation: recordingPulse 1s infinite;
+        }
+
+        @keyframes recordingPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+        }
+
+        #send-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .mode-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .switch {
+            position: relative;
+            width: 50px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #2d5a3d;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .clear-btn {
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            transition: all 0.3s ease;
+        }
+
+        .clear-btn:hover {
+            background: #f0f0f0;
+            color: #666;
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .app-container {
+                min-height: calc(100vh - 20px);
+                border-radius: 15px;
+            }
+            
+            .header {
+                padding: 25px 15px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .chat-area {
+                padding: 15px;
+            }
+            
+            .input-area {
+                padding: 15px;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2d5a3d;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
 </head>
 <body>
-    <div id="chat-container">
-        <div id="chat-header">
+    <div class="app-container">
+        <div class="header">
+            <div class="status-indicator" id="status-indicator"></div>
             <h1>ARA</h1>
-            <div class="header-subtitle">VOICE ASSISTANT</div>
+            <div class="subtitle">Voice Assistant</div>
         </div>
-        <div id="chat-messages">
-            <!-- Chat messages will be appended here -->
+        
+        <div class="chat-area" id="chat-area">
+            <div class="message assistant">
+                <i class="fas fa-robot" style="margin-right: 8px; color: #2d5a3d;"></i>
+                Hello! I'm Ara, your voice assistant. I can help you manage your Google Sheets, answer questions, and much more. Try saying something like "Add 2 apples to my grocery list" or just type your message below.
+            </div>
         </div>
-        <div id="typing-indicator" class="hidden">
-            <div class="bubble"></div>
-            <div class="bubble"></div>
-            <div class="bubble"></div>
+        
+        <div class="typing-indicator" id="typing-indicator">
+            <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
         </div>
-        <div id="chat-input-container">
-            <input type="text" id="chat-input" placeholder="Ask me anything about life... or your sheets...">
-            <button id="mic-btn">
-                <i class="fas fa-microphone"></i>
-            </button>
-        </div>
-        <div id="settings-container">
-             <label class="switch">
-                <input type="checkbox" id="smart-mode-toggle">
-                <span class="slider"></span>
-            </label>
-            <label for="smart-mode-toggle" class="setting-label">GPT-4 Smart Mode</label>
+        
+        <div class="input-area">
+            <div class="input-container">
+                <input type="text" id="chat-input" placeholder="Ask me anything or use voice..." autocomplete="off">
+                <button class="btn" id="mic-btn" title="Voice Input">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button class="btn" id="send-btn" title="Send Message">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+            
+            <div class="controls">
+                <div class="mode-toggle">
+                    <span>Smart Mode</span>
+                    <label class="switch">
+                        <input type="checkbox" id="smart-mode-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <button class="clear-btn" id="clear-btn">
+                    <i class="fas fa-trash"></i> Clear Chat
+                </button>
+            </div>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script>
+        // Global variables
+        let isRecording = false;
+        let recognition = null;
+        let conversationHistory = [];
+
+        // DOM elements
+        const chatArea = document.getElementById('chat-area');
+        const chatInput = document.getElementById('chat-input');
+        const micBtn = document.getElementById('mic-btn');
+        const sendBtn = document.getElementById('send-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const smartModeToggle = document.getElementById('smart-mode-toggle');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const statusIndicator = document.getElementById('status-indicator');
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSpeechRecognition();
+            loadConversationHistory();
+            setupEventListeners();
+            updateStatus('ready');
+        });
+
+        // Setup event listeners
+        function setupEventListeners() {
+            sendBtn.addEventListener('click', sendMessage);
+            micBtn.addEventListener('click', toggleVoiceRecording);
+            clearBtn.addEventListener('click', clearChat);
+            
+            chatInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            chatInput.addEventListener('input', function() {
+                sendBtn.style.opacity = this.value.trim() ? '1' : '0.6';
+            });
+        }
+
+        // Initialize speech recognition
+        function initializeSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+                
+                recognition.onstart = function() {
+                    isRecording = true;
+                    micBtn.classList.add('recording');
+                    updateStatus('listening');
+                };
+                
+                recognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    chatInput.value = transcript;
+                    sendMessage();
+                };
+                
+                recognition.onerror = function(event) {
+                    console.error('Speech recognition error:', event.error);
+                    showMessage('assistant', 'Sorry, I had trouble hearing you. Please try again or type your message.');
+                    updateStatus('error');
+                    setTimeout(() => updateStatus('ready'), 2000);
+                };
+                
+                recognition.onend = function() {
+                    isRecording = false;
+                    micBtn.classList.remove('recording');
+                    updateStatus('ready');
+                };
+            } else {
+                micBtn.style.display = 'none';
+                console.log('Speech recognition not supported');
+            }
+        }
+
+        // Toggle voice recording
+        function toggleVoiceRecording() {
+            if (!recognition) {
+                showMessage('assistant', 'Voice recognition is not supported in your browser. Please type your message instead.');
+                return;
+            }
+
+            if (isRecording) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        }
+
+        // Send message
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            // Show user message
+            showMessage('user', message);
+            chatInput.value = '';
+            sendBtn.style.opacity = '0.6';
+
+            // Show typing indicator
+            showTypingIndicator(true);
+            updateStatus('thinking');
+
+            try {
+                const response = await fetch('/voice-command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ command: message })
+                });
+
+                const data = await response.json();
+                
+                showTypingIndicator(false);
+                
+                if (data.status === 'success') {
+                    showMessage('assistant', data.answer);
+                    updateStatus('ready');
+                } else {
+                    showMessage('assistant', `Sorry, I encountered an error: ${data.message}`);
+                    updateStatus('error');
+                    setTimeout(() => updateStatus('ready'), 2000);
+                }
+            } catch (error) {
+                showTypingIndicator(false);
+                showMessage('assistant', 'Sorry, I\'m having trouble connecting. Please check your internet connection and try again.');
+                updateStatus('error');
+                setTimeout(() => updateStatus('ready'), 2000);
+                console.error('Error:', error);
+            }
+
+            saveConversationHistory();
+        }
+
+        // Show message in chat
+        function showMessage(sender, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            if (sender === 'assistant') {
+                messageDiv.innerHTML = `<i class="fas fa-robot" style="margin-right: 8px; color: #2d5a3d;"></i>${text}`;
+            } else {
+                messageDiv.innerHTML = `<i class="fas fa-user" style="margin-right: 8px;"></i>${text}`;
+            }
+            
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+
+            // Add to conversation history
+            conversationHistory.push({ sender, text, timestamp: new Date().toISOString() });
+        }
+
+        // Show/hide typing indicator
+        function showTypingIndicator(show) {
+            if (show) {
+                typingIndicator.classList.add('show');
+                chatArea.scrollTop = chatArea.scrollHeight;
+            } else {
+                typingIndicator.classList.remove('show');
+            }
+        }
+
+        // Update status indicator
+        function updateStatus(status) {
+            statusIndicator.className = 'status-indicator';
+            
+            switch (status) {
+                case 'ready':
+                    statusIndicator.style.background = '#4CAF50';
+                    statusIndicator.title = 'Ready';
+                    break;
+                case 'listening':
+                    statusIndicator.style.background = '#2196F3';
+                    statusIndicator.title = 'Listening...';
+                    break;
+                case 'thinking':
+                    statusIndicator.style.background = '#FF9800';
+                    statusIndicator.title = 'Processing...';
+                    break;
+                case 'error':
+                    statusIndicator.style.background = '#F44336';
+                    statusIndicator.title = 'Error';
+                    break;
+            }
+        }
+
+        // Clear chat
+        function clearChat() {
+            if (confirm('Are you sure you want to clear the chat history?')) {
+                chatArea.innerHTML = `
+                    <div class="message assistant">
+                        <i class="fas fa-robot" style="margin-right: 8px; color: #2d5a3d;"></i>
+                        Chat cleared! How can I help you today?
+                    </div>
+                `;
+                conversationHistory = [];
+                saveConversationHistory();
+            }
+        }
+
+        // Save conversation history
+        function saveConversationHistory() {
+            try {
+                localStorage.setItem('araConversationHistory', JSON.stringify(conversationHistory));
+            } catch (error) {
+                console.error('Error saving conversation history:', error);
+            }
+        }
+
+        // Load conversation history
+        function loadConversationHistory() {
+            try {
+                const saved = localStorage.getItem('araConversationHistory');
+                if (saved) {
+                    conversationHistory = JSON.parse(saved);
+                    
+                    // Clear current messages except welcome
+                    const welcomeMessage = chatArea.querySelector('.message.assistant');
+                    chatArea.innerHTML = '';
+                    
+                    // Restore messages
+                    conversationHistory.forEach(msg => {
+                        showMessage(msg.sender, msg.text);
+                    });
+                    
+                    // If no history, show welcome message
+                    if (conversationHistory.length === 0) {
+                        chatArea.appendChild(welcomeMessage);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading conversation history:', error);
+            }
+        }
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch((registrationError) => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+
+        // PWA Installation
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show install button or notification
+            const installBtn = document.createElement('button');
+            installBtn.textContent = 'Install App';
+            installBtn.className = 'install-btn';
+            installBtn.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: #2d5a3d;
+                color: white;
+                border: none;
+                padding: 10px 15px;
+                border-radius: 20px;
+                cursor: pointer;
+                font-size: 0.9em;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 1000;
+            `;
+            
+            installBtn.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log(`User response to the install prompt: ${outcome}`);
+                    deferredPrompt = null;
+                    installBtn.remove();
+                }
+            });
+            
+            document.body.appendChild(installBtn);
+            
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                if (installBtn.parentNode) {
+                    installBtn.remove();
+                }
+            }, 10000);
+        });
+    </script>
 </body>
 </html>
