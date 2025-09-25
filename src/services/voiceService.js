@@ -1,5 +1,6 @@
 import * as Speech from 'expo-speech';
 import { searchProducts } from './productService';
+import { Platform } from 'react-native';
 
 // Regular expressions for parsing voice commands
 const QUANTITY_REGEX = /\b(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/i;
@@ -24,18 +25,36 @@ export const startVoiceRecognition = async (onResult, onError) => {
   try {
     // This is a placeholder since Expo doesn't have built-in voice recognition
     // In a real app, you would use a library like react-native-voice
-    // For this demo, we'll simulate voice recognition with a timeout
     
-    Speech.speak('Listening for commands...', {
-      language: 'en',
-      pitch: 1.0,
-      rate: 0.9
-    });
-    
-    // Simulate voice recognition result after 2 seconds
-    setTimeout(() => {
-      onResult('Add two grams of blue dream');
-    }, 2000);
+    // For mobile, we'll use a different approach than web
+    if (Platform.OS === 'web') {
+      // Web simulation
+      Speech.speak('Listening for commands...', {
+        language: 'en',
+        pitch: 1.0,
+        rate: 0.9
+      });
+      
+      // Simulate voice recognition result after 2 seconds
+      setTimeout(() => {
+        onResult('Add two grams of blue dream');
+      }, 2000);
+    } else {
+      // On mobile, we'll use a more realistic approach
+      // In a real app, you would integrate with react-native-voice
+      // For now, we'll show a message and simulate a response
+      Speech.speak('Listening for commands. Try saying "Add two grams of Blue Dream"', {
+        language: 'en',
+        pitch: 1.0,
+        rate: 0.9,
+        onDone: () => {
+          // After speaking the prompt, simulate receiving a command
+          setTimeout(() => {
+            onResult('Add two grams of blue dream');
+          }, 3000);
+        }
+      });
+    }
     
     return true;
   } catch (error) {
@@ -190,4 +209,18 @@ export const handleVoiceCommand = async (command, onAddToCart) => {
       error
     };
   }
+};
+
+// New function for mobile voice integration
+export const isMobileVoiceSupported = () => {
+  // In a real app, you would check if the device supports voice recognition
+  // For now, we'll return true for mobile platforms and false for web
+  return Platform.OS !== 'web';
+};
+
+// New function to get voice permissions on mobile
+export const requestVoicePermissions = async () => {
+  // In a real app, you would request microphone permissions
+  // For now, we'll just return true
+  return true;
 };

@@ -5,7 +5,9 @@ import {
   FlatList, 
   TouchableOpacity, 
   RefreshControl,
-  Dimensions
+  Dimensions,
+  Platform,
+  Alert
 } from 'react-native';
 import { 
   Text, 
@@ -18,12 +20,19 @@ import {
   ActivityIndicator,
   IconButton,
   List,
-  Divider
+  Divider,
+  Portal,
+  Dialog
 } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCart } from '../context/CartContext';
 import { getProducts, searchProducts } from '../services/productService';
-import { startVoiceRecognition, handleVoiceCommand } from '../services/voiceService';
+import { 
+  startVoiceRecognition, 
+  handleVoiceCommand, 
+  isMobileVoiceSupported,
+  requestVoicePermissions
+} from '../services/voiceService';
 import { theme, shadowStyles } from '../theme/theme';
 
 const { width } = Dimensions.get('window');
@@ -38,6 +47,8 @@ const SalesScreen = ({ navigation }) => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedType, setSelectedType] = useState(null);
   const [isListening, setIsListening] = useState(false);
+  const [showVoiceDialog, setShowVoiceDialog] = useState(false);
+  const [voiceCommandResult, setVoiceCommandResult] = useState(null);
   
   const categories = ['All', 'Flower', 'Concentrate', 'Edible', 'Pre-Roll', 'Vape'];
   const types = ['All', 'Sativa', 'Indica', 'Hybrid', 'CBD'];
@@ -125,19 +136,43 @@ const SalesScreen = ({ navigation }) => {
   };
   
   const startListening = async () => {
+    // For mobile devices, request permissions first
+    if (Platform.OS !== 'web') {
+      const hasPermission = await requestVoicePermissions();
+      if (!hasPermission) {
+        Alert.alert(
+          'Microphone Permission',
+          'We need microphone permission to use voice commands',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    }
+    
     setIsListening(true);
+    setShowVoiceDialog(true);
     
     await startVoiceRecognition(
       async (result) => {
         console.log('Voice command received:', result);
         
         const commandResult = await handleVoiceCommand(result, handleAddToCart);
+        setVoiceCommandResult(commandResult);
         
-        setIsListening(false);
+        // Keep dialog open to show the result
+        setTimeout(() => {
+          setIsListening(false);
+          // Close dialog after showing result for a moment
+          setTimeout(() => {
+            setShowVoiceDialog(false);
+            setVoiceCommandResult(null);
+          }, 2000);
+        }, 1000);
       },
       (error) => {
         console.error('Voice recognition error:', error);
         setIsListening(false);
+        setShowVoiceDialog(false);
       }
     );
   };
@@ -297,6 +332,41 @@ const SalesScreen = ({ navigation }) => {
         onPress={startListening}
         loading={isListening}
       />
+      
+      <Portal>
+        <Dialog
+          visible={showVoiceDialog}
+          onDismiss={() => !isListening && setShowVoiceDialog(false)}
+          style={styles.voiceDialog}
+        >
+          <View style={styles.voiceDialogContent}>
+            {isListening ? (
+              <>
+                <MaterialCommunityIcons 
+                  name="microphone" 
+                  size={48} 
+                  color={theme.colors.primary}
+                  style={styles.pulsingIcon}
+                />
+                <Text style={styles.voiceDialogText}>
+                  Listening... Try saying "Add two grams of Blue Dream"
+                </Text>
+              </>
+            ) : voiceCommandResult ? (
+              <>
+                <MaterialCommunityIcons 
+                  name={voiceCommandResult.success ? "check-circle" : "alert-circle"} 
+                  size={48} 
+                  color={voiceCommandResult.success ? theme.colors.success : theme.colors.error}
+                />
+                <Text style={styles.voiceDialogText}>
+                  {voiceCommandResult.message}
+                </Text>
+              </>
+            ) : null}
+          </View>
+        </Dialog>
+      </Portal>
     </View>
   );
 };
@@ -435,6 +505,25 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 80,
     backgroundColor: theme.colors.surface,
+  },
+  voiceDialog: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceDialogContent: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  voiceDialogText: {
+    marginTop: 16,
+    textAlign: 'center',
+    color: theme.colors.text,
+    fontSize: 16,
+  },
+  pulsingIcon: {
+    opacity: 0.8,
   },
 });
 
