@@ -1,23 +1,83 @@
-import { DefaultTheme, configureFonts } from 'react-native-paper';
+import { DefaultTheme } from 'react-native-paper';
+import { Platform } from 'react-native';
 
+// Define a more complete font configuration
 const fontConfig = {
-  regular: {
-    fontFamily: 'System',
-    fontWeight: 'normal',
+  web: {
+    regular: {
+      fontFamily: 'System',
+      fontWeight: 'normal',
+    },
+    medium: {
+      fontFamily: 'System',
+      fontWeight: '500',
+    },
+    light: {
+      fontFamily: 'System',
+      fontWeight: '300',
+    },
+    thin: {
+      fontFamily: 'System',
+      fontWeight: '100',
+    },
+    bold: {
+      fontFamily: 'System',
+      fontWeight: 'bold',
+    },
   },
-  medium: {
-    fontFamily: 'System',
-    fontWeight: '500',
+  ios: {
+    regular: {
+      fontFamily: 'System',
+      fontWeight: 'normal',
+    },
+    medium: {
+      fontFamily: 'System',
+      fontWeight: '500',
+    },
+    light: {
+      fontFamily: 'System',
+      fontWeight: '300',
+    },
+    thin: {
+      fontFamily: 'System',
+      fontWeight: '100',
+    },
+    bold: {
+      fontFamily: 'System',
+      fontWeight: 'bold',
+    },
   },
-  light: {
-    fontFamily: 'System',
-    fontWeight: '300',
-  },
-  thin: {
-    fontFamily: 'System',
-    fontWeight: '100',
-  },
+  android: {
+    regular: {
+      fontFamily: 'sans-serif',
+      fontWeight: 'normal',
+    },
+    medium: {
+      fontFamily: 'sans-serif-medium',
+      fontWeight: 'normal',
+    },
+    light: {
+      fontFamily: 'sans-serif-light',
+      fontWeight: 'normal',
+    },
+    thin: {
+      fontFamily: 'sans-serif-thin',
+      fontWeight: 'normal',
+    },
+    bold: {
+      fontFamily: 'sans-serif',
+      fontWeight: 'bold',
+    },
+  }
 };
+
+// Use the appropriate font config based on platform
+const fonts = Platform.select({
+  web: fontConfig.web,
+  ios: fontConfig.ios,
+  android: fontConfig.android,
+  default: fontConfig.ios,
+});
 
 export const theme = {
   ...DefaultTheme,
@@ -44,7 +104,7 @@ export const theme = {
     card: '#1E1E1E',
     border: '#2E2E2E',
   },
-  fonts: configureFonts({ config: fontConfig }),
+  fonts: fonts,
 };
 
 export const buttonStyles = {

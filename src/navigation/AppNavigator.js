@@ -20,25 +20,9 @@ import { theme } from '../theme/theme';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// Disable headers to avoid font loading issues
 const screenOptions = {
-  headerStyle: {
-    backgroundColor: theme.colors.surface,
-  },
-  headerTintColor: theme.colors.primary,
-  headerTitleStyle: {
-    fontWeight: 'bold',
-  },
-  headerShadowVisible: false,
-};
-
-const tabBarOptions = {
-  activeTintColor: theme.colors.primary,
-  inactiveTintColor: theme.colors.disabled,
-  style: {
-    backgroundColor: theme.colors.surface,
-    borderTopWidth: 0,
-    elevation: 0,
-  },
+  headerShown: false, // Disable headers until fonts are properly loaded
 };
 
 const SalesStack = () => (
@@ -46,22 +30,18 @@ const SalesStack = () => (
     <Stack.Screen 
       name="SalesMain" 
       component={SalesScreen} 
-      options={{ title: 'Sales' }} 
     />
     <Stack.Screen 
       name="Cart" 
       component={CartScreen} 
-      options={{ title: 'Shopping Cart' }} 
     />
     <Stack.Screen 
       name="SaleDetail" 
       component={SaleDetailScreen} 
-      options={{ title: 'Sale Details' }} 
     />
     <Stack.Screen 
       name="ProductDetail" 
       component={ProductDetailScreen} 
-      options={{ title: 'Product Details' }} 
     />
   </Stack.Navigator>
 );
@@ -71,12 +51,10 @@ const InventoryStack = () => (
     <Stack.Screen 
       name="InventoryMain" 
       component={InventoryScreen} 
-      options={{ title: 'Inventory' }} 
     />
     <Stack.Screen 
       name="ProductDetail" 
       component={ProductDetailScreen} 
-      options={{ title: 'Product Details' }} 
     />
   </Stack.Navigator>
 );
@@ -86,12 +64,10 @@ const SettingsStack = () => (
     <Stack.Screen 
       name="SettingsMain" 
       component={SettingsScreen} 
-      options={{ title: 'Settings' }} 
     />
     <Stack.Screen 
       name="CashFloat" 
       component={CashFloatScreen} 
-      options={{ title: 'Cash Float Management' }} 
     />
   </Stack.Navigator>
 );
@@ -99,6 +75,7 @@ const SettingsStack = () => (
 const MainTabs = () => (
   <Tab.Navigator
     screenOptions={{
+      headerShown: false, // Disable headers until fonts are properly loaded
       tabBarActiveTintColor: theme.colors.primary,
       tabBarInactiveTintColor: theme.colors.disabled,
       tabBarStyle: {
@@ -109,14 +86,6 @@ const MainTabs = () => (
         paddingBottom: 8,
         paddingTop: 8,
       },
-      headerStyle: {
-        backgroundColor: theme.colors.surface,
-      },
-      headerTintColor: theme.colors.primary,
-      headerTitleStyle: {
-        fontWeight: 'bold',
-      },
-      headerShadowVisible: false,
     }}
   >
     <Tab.Screen 
@@ -132,7 +101,6 @@ const MainTabs = () => (
       name="Sales" 
       component={SalesStack} 
       options={{
-        headerShown: false,
         tabBarIcon: ({ color, size }) => (
           <MaterialCommunityIcons name="cash-register" color={color} size={size} />
         ),
@@ -142,7 +110,6 @@ const MainTabs = () => (
       name="Inventory" 
       component={InventoryStack} 
       options={{
-        headerShown: false,
         tabBarIcon: ({ color, size }) => (
           <MaterialCommunityIcons name="package-variant-closed" color={color} size={size} />
         ),
@@ -152,7 +119,6 @@ const MainTabs = () => (
       name="Settings" 
       component={SettingsStack} 
       options={{
-        headerShown: false,
         tabBarIcon: ({ color, size }) => (
           <MaterialCommunityIcons name="cog" color={color} size={size} />
         ),
