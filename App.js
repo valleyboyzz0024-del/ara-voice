@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StatusBar, LogBox } from 'react-native';
+import { StatusBar, LogBox, View, Text, ActivityIndicator } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -17,15 +17,19 @@ LogBox.ignoreLogs([
 export default function App() {
   const [dbInitialized, setDbInitialized] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   useEffect(() => {
     const initApp = async () => {
       try {
+        console.log('Initializing database...');
         // Initialize database
         await initDatabase();
+        console.log('Database initialized successfully');
         setDbInitialized(true);
       } catch (error) {
         console.error('Error initializing app:', error);
+        setError('Failed to initialize database. Please restart the app.');
       } finally {
         setLoading(false);
       }
@@ -35,7 +39,51 @@ export default function App() {
   }, []);
   
   if (loading) {
-    return null; // Or a loading screen
+    return (
+      <View style={{ 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        backgroundColor: theme.colors.background
+      }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={{ 
+          marginTop: 20, 
+          color: theme.colors.text,
+          fontSize: 16
+        }}>
+          Loading Cannabis POS...
+        </Text>
+      </View>
+    );
+  }
+  
+  if (error) {
+    return (
+      <View style={{ 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        backgroundColor: theme.colors.background,
+        padding: 20
+      }}>
+        <Text style={{ 
+          color: theme.colors.error,
+          fontSize: 18,
+          marginBottom: 20,
+          textAlign: 'center'
+        }}>
+          {error}
+        </Text>
+        <Text style={{ 
+          color: theme.colors.text,
+          fontSize: 14,
+          textAlign: 'center'
+        }}>
+          If the problem persists, please clear the app data and try again.
+        </Text>
+      </View>
+    );
   }
   
   return (
