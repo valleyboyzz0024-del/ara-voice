@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { StatusBar, LogBox, View, Text, ActivityIndicator } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import * as Font from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import AppNavigator from './src/navigation/AppNavigator';
 import { theme } from './src/theme/theme';
@@ -32,32 +31,8 @@ export default function App() {
         await initDatabase();
         console.log('Database initialized successfully');
         
-        // Load fonts
-        await Font.loadAsync({
-          'System': require('expo-font/build/FontLoader').loadAsync({
-            'normal': {
-              fontFamily: 'System',
-              fontWeight: 'normal',
-            },
-            'medium': {
-              fontFamily: 'System',
-              fontWeight: '500',
-            },
-            'light': {
-              fontFamily: 'System',
-              fontWeight: '300',
-            },
-            'thin': {
-              fontFamily: 'System',
-              fontWeight: '100',
-            },
-            'bold': {
-              fontFamily: 'System',
-              fontWeight: 'bold',
-            },
-          }),
-        });
-        console.log('Fonts loaded successfully');
+        // Skip font loading to avoid crashes
+        console.log('Skipping font loading to avoid crashes');
         
       } catch (e) {
         console.warn('Error loading resources:', e);

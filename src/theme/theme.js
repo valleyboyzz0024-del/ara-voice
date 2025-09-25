@@ -1,84 +1,6 @@
 import { DefaultTheme } from 'react-native-paper';
-import { Platform } from 'react-native';
 
-// Define a more complete font configuration
-const fontConfig = {
-  web: {
-    regular: {
-      fontFamily: 'System',
-      fontWeight: 'normal',
-    },
-    medium: {
-      fontFamily: 'System',
-      fontWeight: '500',
-    },
-    light: {
-      fontFamily: 'System',
-      fontWeight: '300',
-    },
-    thin: {
-      fontFamily: 'System',
-      fontWeight: '100',
-    },
-    bold: {
-      fontFamily: 'System',
-      fontWeight: 'bold',
-    },
-  },
-  ios: {
-    regular: {
-      fontFamily: 'System',
-      fontWeight: 'normal',
-    },
-    medium: {
-      fontFamily: 'System',
-      fontWeight: '500',
-    },
-    light: {
-      fontFamily: 'System',
-      fontWeight: '300',
-    },
-    thin: {
-      fontFamily: 'System',
-      fontWeight: '100',
-    },
-    bold: {
-      fontFamily: 'System',
-      fontWeight: 'bold',
-    },
-  },
-  android: {
-    regular: {
-      fontFamily: 'sans-serif',
-      fontWeight: 'normal',
-    },
-    medium: {
-      fontFamily: 'sans-serif-medium',
-      fontWeight: 'normal',
-    },
-    light: {
-      fontFamily: 'sans-serif-light',
-      fontWeight: 'normal',
-    },
-    thin: {
-      fontFamily: 'sans-serif-thin',
-      fontWeight: 'normal',
-    },
-    bold: {
-      fontFamily: 'sans-serif',
-      fontWeight: 'bold',
-    },
-  }
-};
-
-// Use the appropriate font config based on platform
-const fonts = Platform.select({
-  web: fontConfig.web,
-  ios: fontConfig.ios,
-  android: fontConfig.android,
-  default: fontConfig.ios,
-});
-
+// Simple theme without complex font configurations
 export const theme = {
   ...DefaultTheme,
   dark: true,
@@ -104,7 +26,7 @@ export const theme = {
     card: '#1E1E1E',
     border: '#2E2E2E',
   },
-  fonts: fonts,
+  // No custom fonts configuration - use system defaults
 };
 
 export const buttonStyles = {
